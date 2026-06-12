@@ -576,10 +576,10 @@ function ParserModule() {
     let lastTaskId: number|null = null;
     for (let i = 0; i < urls.length; i++) {
       setProgress({ current: i + 1, total: urls.length });
-      const r = await fetch(PARSER_URL, { method:"POST", headers:{"Content-Type":"application/json"}, body: JSON.stringify({urls: urls[i]}) });
-      const d = await r.json();
+      const r = await fetch(PARSER_URL, { method:"POST", headers:{"Content-Type":"application/json"}, body: JSON.stringify({urls: urls[i]}) }).catch(() => null);
+      if (!r || !r.ok) continue;
+      const d = await r.json().catch(() => ({}));
       if (d.success && d.task_ids?.[0]) lastTaskId = d.task_ids[0];
-      else if (!d.success) setError(d.error||"Ошибка на одном из URL");
     }
     setRunning(false); setProgress({ current: 0, total: 0 });
     setSingleUrl(""); setBulkUrls(""); fetchTasks();

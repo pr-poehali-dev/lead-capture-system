@@ -43,7 +43,7 @@ class LinkParser(HTMLParser):
                         self.links.add(full.split('#')[0])
 
 
-def fetch_page(url: str, timeout: int = 8) -> str:
+def fetch_page(url: str, timeout: int = 4) -> str:
     req = urllib.request.Request(url, headers=HEADERS)
     try:
         with urllib.request.urlopen(req, timeout=timeout) as resp:
@@ -105,7 +105,7 @@ def get_pages_to_scan(base_url: str, main_html: str) -> list:
         if any(kw in path for kw in ['contact', 'kontakt', 'about', 'o-nas', 'o-kompan']):
             pages.add(link)
 
-    return list(pages)[:10]
+    return list(pages)[:5]
 
 
 def parse_site(url: str) -> list:
