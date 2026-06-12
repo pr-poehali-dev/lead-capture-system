@@ -789,6 +789,63 @@ function HelpModule() {
       ),
     },
     {
+      icon: "Send",
+      color: "text-emerald-400 bg-emerald-400/10",
+      title: "Отправка в CRM",
+      short: "Один клик — лид в вашей CRM",
+      content: (
+        <div className="space-y-3 text-sm text-muted-foreground leading-relaxed">
+          <p><span className="text-foreground font-medium">Суть:</span> найденные контакты можно отправить в вашу CRM прямо из таблицы — без ручного копирования.</p>
+          <div className="space-y-2">
+            <p className="text-foreground font-medium text-xs uppercase tracking-widest">Как использовать:</p>
+            {[
+              "В таблице результатов парсера или мониторинга найдите нужный контакт",
+              "Нажмите кнопку «В CRM» в последнем столбце",
+              "Лид автоматически создаётся в CRM с телефоном, именем и пометкой об источнике",
+              "Кнопка меняется на «Добавлен» — повторно не отправится",
+            ].map((s, i) => (
+              <div key={i} className="flex items-start gap-2.5">
+                <div className="w-5 h-5 rounded-full bg-primary/20 text-primary flex items-center justify-center text-xs font-mono flex-shrink-0 mt-0.5">{i+1}</div>
+                <span>{s}</span>
+              </div>
+            ))}
+          </div>
+          <div className="bg-muted/50 rounded p-3 text-xs">
+            <span className="text-foreground font-medium">Подключена CRM:</span> система учёта кандидатов. Лид попадает в раздел «Кандидаты» с пометкой источника ContactHunter.
+          </div>
+        </div>
+      ),
+    },
+    {
+      icon: "PlayCircle",
+      color: "text-violet-400 bg-violet-400/10",
+      title: "Запустить все задачи мониторинга",
+      short: "Одна кнопка — поиск по всем конкурентам",
+      content: (
+        <div className="space-y-3 text-sm text-muted-foreground leading-relaxed">
+          <p><span className="text-foreground font-medium">Суть:</span> если у вас несколько конкурентов в мониторинге — не нужно запускать каждого по отдельности.</p>
+          <div className="space-y-2">
+            <p className="text-foreground font-medium text-xs uppercase tracking-widest">Как использовать:</p>
+            {[
+              "Откройте раздел «Мониторинг»",
+              "Добавьте всех нужных конкурентов",
+              "Нажмите кнопку «Запустить все» в правом верхнем углу раздела",
+              "Система последовательно обойдёт все источники по каждому конкуренту",
+              "После завершения — результаты появятся у каждой задачи",
+            ].map((s, i) => (
+              <div key={i} className="flex items-start gap-2.5">
+                <div className="w-5 h-5 rounded-full bg-primary/20 text-primary flex items-center justify-center text-xs font-mono flex-shrink-0 mt-0.5">{i+1}</div>
+                <span>{s}</span>
+              </div>
+            ))}
+          </div>
+          <div className="bg-muted/50 rounded p-3 text-xs">
+            <span className="text-foreground font-medium">Совет:</span> запускайте раз в день — утром перед работой, чтобы к началу дня уже был свежий список горячих лидов.
+          </div>
+        </div>
+      ),
+    },
+    {
       icon: "Download",
       color: "text-sky-400 bg-sky-400/10",
       title: "Экспорт контактов",
