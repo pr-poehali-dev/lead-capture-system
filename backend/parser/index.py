@@ -10,7 +10,7 @@ import psycopg2
 SCHEMA = "t_p56466268_lead_capture_system"
 
 PHONE_RE = re.compile(
-    r'(?<!\d)(\+7|8)[\s\-\(]?(\d{3})[\s\-\)]?(\d{3})[\s\-]?(\d{2})[\s\-]?(\d{2})(?!\d)'
+    r'(?<!\d)(\+7|8)[\s\-\(]?(\d{3})[\s\-\)\.]?(\d{3})[\s\-\.]?(\d{2})[\s\-\.]?(\d{2})(?!\d)'
 )
 EMAIL_RE = re.compile(r'[a-zA-Z0-9_.+-]+@[a-zA-Z0-9-]+\.[a-zA-Z0-9-.]{2,}')
 VK_RE = re.compile(r'https?://(?:www\.)?vk\.com/[a-zA-Z0-9_.\-]+')
@@ -61,10 +61,10 @@ def fetch_page(url: str, timeout: int = 8) -> str:
 
 
 def normalize_phone(m) -> str:
-    digits = ''.join(m.groups())
-    if digits.startswith('8'):
-        digits = '7' + digits[1:]
-    return f'+{digits[0]} ({digits[1:4]}) {digits[4:7]}-{digits[7:9]}-{digits[9:11]}'
+    prefix, g1, g2, g3, g4 = m.groups()
+    # Приводим к единому формату +7XXXXXXXXXX
+    digits = g1 + g2 + g3 + g4  # 10 цифр без кода страны
+    return f'+7 ({digits[0:3]}) {digits[3:6]}-{digits[6:8]}-{digits[8:10]}'
 
 
 def extract_contacts(html: str, page_url: str) -> dict:
