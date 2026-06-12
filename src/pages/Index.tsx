@@ -367,7 +367,6 @@ function MonitorModule() {
   const [leads, setLeads] = useState<MonitorLead[]>([]);
   const [selected, setSelected] = useState<MonitorTask | null>(null);
   const [showCreate, setShowCreate] = useState(false);
-  const [form, setForm] = useState({ competitor_name: "", keywords: "" });
   const [running, setRunning] = useState<number|null>(null);
   const { sending: crmSending, sent: crmSent, send: sendCrm } = useCrmSend();
 
@@ -381,10 +380,15 @@ function MonitorModule() {
 
   useEffect(() => { fetchTasks(); }, [fetchTasks]);
 
+  const [quickInput, setQuickInput] = useState("");
+
   const create = async () => {
-    if (!form.competitor_name || !form.keywords) return;
-    await fetch(`${MONITOR_URL}?action=create`, { method: "POST", headers: {"Content-Type":"application/json"}, body: JSON.stringify(form) });
-    setShowCreate(false); setForm({competitor_name:"",keywords:""}); fetchTasks();
+    const parts = quickInput.split(",").map(s => s.trim()).filter(Boolean);
+    if (parts.length < 2) return;
+    const competitor_name = parts[0];
+    const keywords = parts.slice(1).join(", ");
+    await fetch(`${MONITOR_URL}?action=create`, { method: "POST", headers: {"Content-Type":"application/json"}, body: JSON.stringify({ competitor_name, keywords }) });
+    setShowCreate(false); setQuickInput(""); fetchTasks();
   };
 
   const runTask = async (id: number) => {
@@ -436,18 +440,14 @@ function MonitorModule() {
         <div className="bg-card card-glow rounded-lg p-5 border border-primary/30 space-y-3">
           <h4 className="text-sm font-semibold text-foreground">Новая задача</h4>
           <div>
-            <label className="text-xs text-muted-foreground uppercase tracking-widest mb-1.5 block">Название конкурента</label>
-            <input value={form.competitor_name} onChange={e => setForm(p=>({...p,competitor_name:e.target.value}))}
-              placeholder="Компания Конкурент" className="w-full bg-muted border border-border rounded px-3 py-2 text-sm text-foreground outline-none focus:border-primary transition-colors" />
-          </div>
-          <div>
-            <label className="text-xs text-muted-foreground uppercase tracking-widest mb-1.5 block">Ключевые слова</label>
-            <input value={form.keywords} onChange={e => setForm(p=>({...p,keywords:e.target.value}))}
-              placeholder="ищу альтернативу, недоволен, порекомендуйте" className="w-full bg-muted border border-border rounded px-3 py-2 text-sm text-foreground outline-none focus:border-primary transition-colors" />
-            <p className="text-xs text-muted-foreground mt-1">Что говорят недовольные клиенты конкурента</p>
+            <label className="text-xs text-muted-foreground uppercase tracking-widest mb-1.5 block">Конкурент, ключевые слова</label>
+            <input value={quickInput} onChange={e => setQuickInput(e.target.value)}
+              onKeyDown={e => e.key === "Enter" && create()}
+              placeholder="Компания X, ищу альтернативу, недоволен" className="w-full bg-muted border border-border rounded px-3 py-2 text-sm text-foreground outline-none focus:border-primary transition-colors" />
+            <p className="text-xs text-muted-foreground mt-1">Первое значение — конкурент, остальные через запятую — ключевые слова</p>
           </div>
           <div className="flex gap-2 pt-1">
-            <button onClick={() => setShowCreate(false)} className="px-4 py-2 text-sm bg-muted text-muted-foreground rounded hover:text-foreground">Отмена</button>
+            <button onClick={() => { setShowCreate(false); setQuickInput(""); }} className="px-4 py-2 text-sm bg-muted text-muted-foreground rounded hover:text-foreground">Отмена</button>
             <button onClick={create} className="px-4 py-2 text-sm bg-primary text-primary-foreground rounded hover:bg-primary/90">Создать</button>
           </div>
         </div>
