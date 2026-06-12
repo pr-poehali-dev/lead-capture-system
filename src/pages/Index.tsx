@@ -12,16 +12,14 @@ async function sendToCrm(phone: string|null, name: string|null, notes: string): 
     action: "webhook",
     full_name: name || "Лид из ContactHunter",
     phone: phone || "",
-    city: notes,
+    source: "ContactHunter",
+    comment: notes,
   };
-  console.log("[CRM] Отправляю:", payload);
   const res = await fetch(CRM_URL, {
     method: "POST",
     headers: { "Content-Type": "application/json" },
     body: JSON.stringify(payload),
   });
-  const data = await res.json().catch(() => ({}));
-  console.log("[CRM] Ответ:", res.status, data);
   return res.ok;
 }
 
