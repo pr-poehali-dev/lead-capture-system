@@ -1,5 +1,9 @@
-import { useState } from "react";
+import { useState, useEffect, useCallback } from "react";
 import Icon from "@/components/ui/icon";
+
+const LEADS_URL = "https://functions.poehali.dev/d95cf66f-0e0c-4618-9f44-457254468c3f";
+
+const SOURCES = ["Сайт", "Звонок", "Email", "Реклама", "Партнёр", "Другое"];
 
 const NAV_ITEMS = [
   { id: "dashboard", label: "Главная", icon: "LayoutDashboard" },
@@ -8,16 +12,41 @@ const NAV_ITEMS = [
   { id: "integrations", label: "Интеграции", icon: "Plug" },
 ];
 
-const MOCK_LEADS = [
-  { id: 1, name: "ООО «Технопром»", contact: "Иванов А.В.", source: "Сайт", status: "new", score: 92, amount: "1 200 000 ₽", date: "12.06.2026", phone: "+7 (495) 123-45-67" },
-  { id: 2, name: "АО «МегаСтрой»", contact: "Петрова Е.И.", source: "Звонок", status: "in-progress", score: 78, amount: "3 500 000 ₽", date: "11.06.2026", phone: "+7 (499) 234-56-78" },
-  { id: 3, name: "ИП Сидоров К.П.", contact: "Сидоров К.П.", source: "Email", status: "done", score: 65, amount: "450 000 ₽", date: "10.06.2026", phone: "+7 (985) 345-67-89" },
-  { id: 4, name: "ЗАО «ИнфоТех»", contact: "Николаев Д.С.", source: "Реклама", status: "in-progress", score: 84, amount: "2 100 000 ₽", date: "09.06.2026", phone: "+7 (916) 456-78-90" },
-  { id: 5, name: "ООО «РосГрупп»", contact: "Смирнова Т.В.", source: "Партнёр", status: "lost", score: 34, amount: "800 000 ₽", date: "08.06.2026", phone: "+7 (903) 567-89-01" },
-  { id: 6, name: "ПАО «АльфаЛогист»", contact: "Козлов В.Н.", source: "Сайт", status: "new", score: 88, amount: "5 700 000 ₽", date: "07.06.2026", phone: "+7 (926) 678-90-12" },
-  { id: 7, name: "ООО «БетаПрайм»", contact: "Морозова О.К.", source: "Email", status: "done", score: 71, amount: "990 000 ₽", date: "06.06.2026", phone: "+7 (967) 789-01-23" },
-  { id: 8, name: "ЗАО «ГаммаСистемс»", contact: "Волков И.Р.", source: "Звонок", status: "new", score: 95, amount: "8 400 000 ₽", date: "05.06.2026", phone: "+7 (977) 890-12-34" },
-];
+interface Lead {
+  id: number;
+  company_name: string;
+  contact_name: string;
+  phone: string;
+  email: string;
+  source: string;
+  status: string;
+  amount: number;
+  notes: string;
+  score: number;
+  created_at: string;
+}
+
+function formatAmount(n: number) {
+  if (!n) return "—";
+  return n.toLocaleString("ru-RU") + " ₽";
+}
+
+function useLeads() {
+  const [leads, setLeads] = useState<Lead[]>([]);
+  const [loading, setLoading] = useState(true);
+
+  const fetchLeads = useCallback(async () => {
+    setLoading(true);
+    const res = await fetch(LEADS_URL);
+    const data = await res.json();
+    setLeads(data.leads || []);
+    setLoading(false);
+  }, []);
+
+  useEffect(() => { fetchLeads(); }, [fetchLeads]);
+
+  return { leads, loading, refetch: fetchLeads };
+}
 
 const STATUS_LABELS: Record<string, string> = {
   new: "Новый",
@@ -90,8 +119,26 @@ function BarChartCustom() {
   );
 }
 
-function DonutChart() {
-  const total = SOURCE_DATA.reduce((acc, d) => acc + d.value, 0);
+const SOURCE_COLORS: Record<string, string> = {
+  "Сайт": "#3b82f6",
+  "Звонок": "#f59e0b",
+  "Email": "#8b5cf6",
+  "Реклама": "#10b981",
+  "Партнёр": "#f43f5e",
+  "Другое": "#6b7280",
+};
+
+function DonutChart({ leads }: { leads: Lead[] }) {
+  const counts: Record<string, number> = {};
+  leads.forEach(l => { counts[l.source] = (counts[l.source] || 0) + 1; });
+  const total = leads.length || 1;
+  const data = Object.entries(counts).map(([label, value]) => ({
+    label, value, color: SOURCE_COLORS[label] || "#6b7280",
+  }));
+  if (data.length === 0) {
+    data.push(...SOURCE_DATA.map(d => ({ ...d, value: 0 })));
+  }
+
   let offset = 0;
   const r = 60, cx = 80, cy = 80, strokeWidth = 18;
   const circumference = 2 * Math.PI * r;
@@ -100,37 +147,34 @@ function DonutChart() {
     <div className="flex items-center gap-6">
       <svg width="160" height="160" className="flex-shrink-0">
         <circle cx={cx} cy={cy} r={r} fill="none" stroke="hsl(220, 14%, 16%)" strokeWidth={strokeWidth} />
-        {SOURCE_DATA.map((d, i) => {
+        {data.map((d, i) => {
           const pct = d.value / total;
           const dash = pct * circumference;
           const gap = circumference - dash;
           const currentOffset = circumference * 0.25 - offset * circumference;
           const el = (
-            <circle
-              key={i}
-              cx={cx} cy={cy} r={r}
-              fill="none"
-              stroke={d.color}
-              strokeWidth={strokeWidth}
+            <circle key={i} cx={cx} cy={cy} r={r} fill="none"
+              stroke={d.color} strokeWidth={strokeWidth}
               strokeDasharray={`${dash} ${gap}`}
               strokeDashoffset={currentOffset}
-              className="transition-all duration-500"
-            />
+              className="transition-all duration-500" />
           );
           offset += pct;
           return el;
         })}
-        <text x={cx} y={cy - 6} textAnchor="middle" fill="hsl(210, 20%, 92%)" fontSize="22" fontWeight="600" fontFamily="IBM Plex Mono">248</text>
+        <text x={cx} y={cy - 6} textAnchor="middle" fill="hsl(210, 20%, 92%)" fontSize="22" fontWeight="600" fontFamily="IBM Plex Mono">{leads.length}</text>
         <text x={cx} y={cy + 14} textAnchor="middle" fill="hsl(215, 15%, 55%)" fontSize="11" fontFamily="IBM Plex Sans">лидов</text>
       </svg>
       <div className="flex flex-col gap-2 flex-1">
-        {SOURCE_DATA.map((d, i) => (
+        {data.map((d, i) => (
           <div key={i} className="flex items-center justify-between gap-2">
             <div className="flex items-center gap-2">
               <div className="w-2 h-2 rounded-full flex-shrink-0" style={{ background: d.color }} />
               <span className="text-sm text-muted-foreground">{d.label}</span>
             </div>
-            <span className="text-sm font-mono font-medium text-foreground">{d.value}%</span>
+            <span className="text-sm font-mono font-medium text-foreground">
+              {total > 0 ? Math.round((d.value / leads.length) * 100) : 0}%
+            </span>
           </div>
         ))}
       </div>
@@ -138,11 +182,127 @@ function DonutChart() {
   );
 }
 
-function Dashboard() {
+function AddLeadModal({ onClose, onSaved }: { onClose: () => void; onSaved: () => void }) {
+  const [form, setForm] = useState({ company_name: "", contact_name: "", phone: "", email: "", source: "Сайт", amount: "", notes: "" });
+  const [saving, setSaving] = useState(false);
+  const [error, setError] = useState("");
+
+  const set = (k: string, v: string) => setForm((p) => ({ ...p, [k]: v }));
+
+  const submit = async (e: React.FormEvent) => {
+    e.preventDefault();
+    if (!form.company_name.trim() || !form.contact_name.trim()) {
+      setError("Заполните название компании и имя контакта");
+      return;
+    }
+    setSaving(true);
+    setError("");
+    const res = await fetch(LEADS_URL, {
+      method: "POST",
+      headers: { "Content-Type": "application/json" },
+      body: JSON.stringify({ ...form, amount: parseInt(form.amount || "0") }),
+    });
+    if (res.ok) {
+      onSaved();
+    } else {
+      const data = await res.json();
+      setError(data.error || "Ошибка при сохранении");
+      setSaving(false);
+    }
+  };
+
+  return (
+    <div className="fixed inset-0 z-50 flex items-center justify-center bg-black/60 backdrop-blur-sm animate-fade-in">
+      <div className="bg-card card-glow rounded-lg w-full max-w-lg mx-4">
+        <div className="flex items-center justify-between px-6 py-4 border-b border-border">
+          <h2 className="text-sm font-semibold text-foreground">Новый лид</h2>
+          <button onClick={onClose} className="text-muted-foreground hover:text-foreground transition-colors">
+            <Icon name="X" size={18} />
+          </button>
+        </div>
+        <form onSubmit={submit} className="px-6 py-5 space-y-4">
+          <div className="grid grid-cols-2 gap-4">
+            <div className="col-span-2">
+              <label className="text-xs text-muted-foreground uppercase tracking-widest mb-1.5 block">Название компании *</label>
+              <input value={form.company_name} onChange={e => set("company_name", e.target.value)}
+                placeholder="ООО «Компания»"
+                className="w-full bg-muted border border-border rounded px-3 py-2 text-sm text-foreground placeholder:text-muted-foreground outline-none focus:border-primary transition-colors" />
+            </div>
+            <div>
+              <label className="text-xs text-muted-foreground uppercase tracking-widest mb-1.5 block">Контактное лицо *</label>
+              <input value={form.contact_name} onChange={e => set("contact_name", e.target.value)}
+                placeholder="Иванов А.В."
+                className="w-full bg-muted border border-border rounded px-3 py-2 text-sm text-foreground placeholder:text-muted-foreground outline-none focus:border-primary transition-colors" />
+            </div>
+            <div>
+              <label className="text-xs text-muted-foreground uppercase tracking-widest mb-1.5 block">Телефон</label>
+              <input value={form.phone} onChange={e => set("phone", e.target.value)}
+                placeholder="+7 (999) 000-00-00"
+                className="w-full bg-muted border border-border rounded px-3 py-2 text-sm text-foreground placeholder:text-muted-foreground outline-none focus:border-primary transition-colors" />
+            </div>
+            <div>
+              <label className="text-xs text-muted-foreground uppercase tracking-widest mb-1.5 block">Email</label>
+              <input value={form.email} onChange={e => set("email", e.target.value)}
+                placeholder="mail@company.ru"
+                className="w-full bg-muted border border-border rounded px-3 py-2 text-sm text-foreground placeholder:text-muted-foreground outline-none focus:border-primary transition-colors" />
+            </div>
+            <div>
+              <label className="text-xs text-muted-foreground uppercase tracking-widest mb-1.5 block">Источник</label>
+              <select value={form.source} onChange={e => set("source", e.target.value)}
+                className="w-full bg-muted border border-border rounded px-3 py-2 text-sm text-foreground outline-none focus:border-primary transition-colors">
+                {SOURCES.map(s => <option key={s} value={s}>{s}</option>)}
+              </select>
+            </div>
+            <div>
+              <label className="text-xs text-muted-foreground uppercase tracking-widest mb-1.5 block">Сумма сделки, ₽</label>
+              <input value={form.amount} onChange={e => set("amount", e.target.value)}
+                placeholder="1 000 000" type="number"
+                className="w-full bg-muted border border-border rounded px-3 py-2 text-sm text-foreground placeholder:text-muted-foreground outline-none focus:border-primary transition-colors" />
+            </div>
+            <div className="col-span-2">
+              <label className="text-xs text-muted-foreground uppercase tracking-widest mb-1.5 block">Примечание</label>
+              <textarea value={form.notes} onChange={e => set("notes", e.target.value)}
+                placeholder="Дополнительная информация..." rows={3}
+                className="w-full bg-muted border border-border rounded px-3 py-2 text-sm text-foreground placeholder:text-muted-foreground outline-none focus:border-primary transition-colors resize-none" />
+            </div>
+          </div>
+          {error && <div className="text-xs text-destructive bg-destructive/10 rounded px-3 py-2">{error}</div>}
+          <div className="flex justify-end gap-2 pt-1">
+            <button type="button" onClick={onClose}
+              className="px-4 py-2 text-sm text-muted-foreground bg-muted rounded hover:text-foreground transition-colors">
+              Отмена
+            </button>
+            <button type="submit" disabled={saving}
+              className="px-4 py-2 text-sm bg-primary text-primary-foreground rounded hover:bg-primary/90 transition-colors disabled:opacity-50 flex items-center gap-2">
+              {saving && <Icon name="Loader2" size={14} className="animate-spin" />}
+              {saving ? "Сохранение..." : "Добавить лид"}
+            </button>
+          </div>
+        </form>
+      </div>
+    </div>
+  );
+}
+
+function Dashboard({ leads, loading }: { leads: Lead[]; loading: boolean }) {
+  const total = leads.length;
+  const newToday = leads.filter(l => l.created_at === new Date().toLocaleDateString("ru-RU", { day: "2-digit", month: "2-digit", year: "numeric" }).split(".").join(".")).length;
+  const closed = leads.filter(l => l.status === "done").length;
+  const conv = total > 0 ? ((closed / total) * 100).toFixed(1) : "0.0";
+  const totalAmount = leads.reduce((acc, l) => acc + (l.amount || 0), 0);
+  const amountStr = totalAmount >= 1_000_000 ? (totalAmount / 1_000_000).toFixed(1) + " млн" : totalAmount.toLocaleString("ru-RU") + " ₽";
+
+  const dynamicStats = [
+    { label: "Всего лидов", value: String(total), delta: "за всё время", icon: "Users", color: "text-blue-400" },
+    { label: "Новые сегодня", value: String(newToday), delta: "сегодня", icon: "UserPlus", color: "text-emerald-400" },
+    { label: "Конверсия", value: conv + "%", delta: "закрытых от общего", icon: "TrendingUp", color: "text-amber-400" },
+    { label: "Выручка в работе", value: amountStr, delta: "суммарно", icon: "DollarSign", color: "text-violet-400" },
+  ];
+
   return (
     <div className="animate-fade-in space-y-6">
       <div className="grid grid-cols-2 lg:grid-cols-4 gap-4">
-        {STAT_CARDS.map((card, i) => (
+        {dynamicStats.map((card, i) => (
           <div key={i} className="bg-card card-glow rounded p-5 flex flex-col gap-3">
             <div className="flex items-center justify-between">
               <span className="text-xs text-muted-foreground uppercase tracking-widest">{card.label}</span>
@@ -150,11 +310,10 @@ function Dashboard() {
                 <Icon name={card.icon} size={16} />
               </div>
             </div>
-            <div className="font-mono text-2xl font-semibold text-foreground">{card.value}</div>
-            <div className="text-xs text-emerald-400 flex items-center gap-1">
-              <Icon name="ArrowUpRight" size={12} />
-              {card.delta} за месяц
+            <div className="font-mono text-2xl font-semibold text-foreground">
+              {loading ? <span className="text-muted-foreground">—</span> : card.value}
             </div>
+            <div className="text-xs text-muted-foreground">{card.delta}</div>
           </div>
         ))}
       </div>
@@ -185,76 +344,73 @@ function Dashboard() {
             <h3 className="text-sm font-semibold text-foreground">Источники лидов</h3>
             <p className="text-xs text-muted-foreground mt-0.5">Распределение по каналам</p>
           </div>
-          <DonutChart />
+          <DonutChart leads={leads} />
         </div>
       </div>
 
       <div className="bg-card card-glow rounded p-5">
         <h3 className="text-sm font-semibold text-foreground mb-4">Последние лиды</h3>
-        <div className="space-y-2">
-          {MOCK_LEADS.slice(0, 5).map((lead) => (
-            <div key={lead.id} className="flex items-center justify-between py-2 border-b border-border last:border-0">
-              <div className="flex items-center gap-3">
-                <div className="w-7 h-7 rounded bg-primary/10 flex items-center justify-center text-primary text-xs font-semibold">
-                  {lead.name[0]}
+        {loading ? (
+          <div className="text-center py-8 text-muted-foreground text-sm">Загрузка...</div>
+        ) : (
+          <div className="space-y-2">
+            {leads.slice(0, 5).map((lead) => (
+              <div key={lead.id} className="flex items-center justify-between py-2 border-b border-border last:border-0">
+                <div className="flex items-center gap-3">
+                  <div className="w-7 h-7 rounded bg-primary/10 flex items-center justify-center text-primary text-xs font-semibold">
+                    {lead.company_name[0]}
+                  </div>
+                  <div>
+                    <div className="text-sm font-medium text-foreground">{lead.company_name}</div>
+                    <div className="text-xs text-muted-foreground">{lead.contact_name} · {lead.source}</div>
+                  </div>
                 </div>
-                <div>
-                  <div className="text-sm font-medium text-foreground">{lead.name}</div>
-                  <div className="text-xs text-muted-foreground">{lead.contact} · {lead.source}</div>
+                <div className="flex items-center gap-4">
+                  <span className="font-mono text-sm text-foreground">{formatAmount(lead.amount)}</span>
+                  <span className={`text-xs px-2 py-0.5 rounded-full font-medium ${STATUS_CLASSES[lead.status] || "status-new"}`}>
+                    {STATUS_LABELS[lead.status] || "Новый"}
+                  </span>
                 </div>
               </div>
-              <div className="flex items-center gap-4">
-                <span className="font-mono text-sm text-foreground">{lead.amount}</span>
-                <span className={`text-xs px-2 py-0.5 rounded-full font-medium ${STATUS_CLASSES[lead.status]}`}>
-                  {STATUS_LABELS[lead.status]}
-                </span>
-              </div>
-            </div>
-          ))}
-        </div>
+            ))}
+            {leads.length === 0 && <div className="text-center py-6 text-muted-foreground text-sm">Нет лидов. Добавьте первый!</div>}
+          </div>
+        )}
       </div>
     </div>
   );
 }
 
-function Leads() {
+function Leads({ leads, loading, onAdd }: { leads: Lead[]; loading: boolean; onAdd: () => void }) {
   const [filter, setFilter] = useState("all");
   const [search, setSearch] = useState("");
 
-  const filtered = MOCK_LEADS.filter((l) => {
+  const filtered = leads.filter((l) => {
     const matchStatus = filter === "all" || l.status === filter;
     const matchSearch =
-      l.name.toLowerCase().includes(search.toLowerCase()) ||
-      l.contact.toLowerCase().includes(search.toLowerCase());
+      l.company_name.toLowerCase().includes(search.toLowerCase()) ||
+      l.contact_name.toLowerCase().includes(search.toLowerCase());
     return matchStatus && matchSearch;
   });
 
   return (
     <div className="animate-fade-in space-y-4">
       <div className="flex items-center justify-between gap-4 flex-wrap">
-        <div className="flex items-center gap-2">
+        <div className="flex items-center gap-2 flex-wrap">
           {["all", "new", "in-progress", "done", "lost"].map((s) => (
-            <button
-              key={s}
-              onClick={() => setFilter(s)}
+            <button key={s} onClick={() => setFilter(s)}
               className={`text-xs px-3 py-1.5 rounded transition-all font-medium ${
-                filter === s
-                  ? "bg-primary text-primary-foreground"
-                  : "bg-muted text-muted-foreground hover:text-foreground"
-              }`}
-            >
+                filter === s ? "bg-primary text-primary-foreground" : "bg-muted text-muted-foreground hover:text-foreground"
+              }`}>
               {s === "all" ? "Все" : STATUS_LABELS[s]}
             </button>
           ))}
         </div>
         <div className="flex items-center gap-2 bg-muted rounded px-3 py-1.5 w-64">
           <Icon name="Search" size={14} className="text-muted-foreground" />
-          <input
-            value={search}
-            onChange={(e) => setSearch(e.target.value)}
+          <input value={search} onChange={(e) => setSearch(e.target.value)}
             placeholder="Поиск по лидам..."
-            className="bg-transparent text-sm text-foreground placeholder:text-muted-foreground outline-none w-full"
-          />
+            className="bg-transparent text-sm text-foreground placeholder:text-muted-foreground outline-none w-full" />
         </div>
       </div>
 
@@ -263,63 +419,63 @@ function Leads() {
           <thead>
             <tr className="border-b border-border">
               {["Компания", "Контакт", "Источник", "Телефон", "Статус", "Оценка", "Сумма", "Дата"].map((h) => (
-                <th key={h} className="text-left text-xs text-muted-foreground uppercase tracking-widest px-4 py-3 font-medium">
-                  {h}
-                </th>
+                <th key={h} className="text-left text-xs text-muted-foreground uppercase tracking-widest px-4 py-3 font-medium">{h}</th>
               ))}
             </tr>
           </thead>
           <tbody>
-            {filtered.map((lead, i) => (
+            {loading && (
+              <tr><td colSpan={8} className="text-center py-12 text-muted-foreground text-sm">Загрузка...</td></tr>
+            )}
+            {!loading && filtered.map((lead) => (
               <tr key={lead.id} className="border-b border-border/50 hover:bg-muted/30 transition-colors cursor-pointer">
                 <td className="px-4 py-3">
                   <div className="flex items-center gap-2">
                     <div className="w-6 h-6 rounded bg-primary/10 flex items-center justify-center text-primary text-xs font-semibold flex-shrink-0">
-                      {lead.name[0]}
+                      {lead.company_name[0]}
                     </div>
-                    <span className="text-sm font-medium text-foreground truncate max-w-[140px]">{lead.name}</span>
+                    <span className="text-sm font-medium text-foreground truncate max-w-[140px]">{lead.company_name}</span>
                   </div>
                 </td>
-                <td className="px-4 py-3 text-sm text-muted-foreground">{lead.contact}</td>
+                <td className="px-4 py-3 text-sm text-muted-foreground">{lead.contact_name}</td>
                 <td className="px-4 py-3">
                   <span className="text-xs bg-muted px-2 py-0.5 rounded text-muted-foreground">{lead.source}</span>
                 </td>
-                <td className="px-4 py-3 text-sm font-mono text-muted-foreground">{lead.phone}</td>
+                <td className="px-4 py-3 text-sm font-mono text-muted-foreground">{lead.phone || "—"}</td>
                 <td className="px-4 py-3">
-                  <span className={`text-xs px-2 py-0.5 rounded-full font-medium ${STATUS_CLASSES[lead.status]}`}>
-                    {STATUS_LABELS[lead.status]}
+                  <span className={`text-xs px-2 py-0.5 rounded-full font-medium ${STATUS_CLASSES[lead.status] || "status-new"}`}>
+                    {STATUS_LABELS[lead.status] || "Новый"}
                   </span>
                 </td>
                 <td className="px-4 py-3">
                   <div className="flex items-center gap-2">
                     <div className="w-16 h-1 bg-muted rounded-full overflow-hidden">
-                      <div
-                        className={`h-full rounded-full ${lead.score >= 80 ? "bg-emerald-400" : lead.score >= 60 ? "bg-amber-400" : "bg-rose-400"}`}
-                        style={{ width: `${lead.score}%` }}
-                      />
+                      <div className={`h-full rounded-full ${lead.score >= 80 ? "bg-emerald-400" : lead.score >= 60 ? "bg-amber-400" : "bg-rose-400"}`}
+                        style={{ width: `${lead.score}%` }} />
                     </div>
                     <span className="text-xs font-mono text-foreground">{lead.score}</span>
                   </div>
                 </td>
-                <td className="px-4 py-3 text-sm font-mono font-medium text-foreground">{lead.amount}</td>
-                <td className="px-4 py-3 text-xs text-muted-foreground font-mono">{lead.date}</td>
+                <td className="px-4 py-3 text-sm font-mono font-medium text-foreground">{formatAmount(lead.amount)}</td>
+                <td className="px-4 py-3 text-xs text-muted-foreground font-mono">{lead.created_at}</td>
               </tr>
             ))}
           </tbody>
         </table>
-        {filtered.length === 0 && (
-          <div className="text-center py-12 text-muted-foreground text-sm">Лиды не найдены</div>
+        {!loading && filtered.length === 0 && (
+          <div className="text-center py-12 space-y-3">
+            <div className="text-muted-foreground text-sm">Лиды не найдены</div>
+            {leads.length === 0 && (
+              <button onClick={onAdd} className="text-xs text-primary hover:underline">
+                + Добавить первый лид
+              </button>
+            )}
+          </div>
         )}
       </div>
 
       <div className="flex items-center justify-between text-xs text-muted-foreground">
-        <span>Показано {filtered.length} из {MOCK_LEADS.length} лидов</span>
-        <div className="flex items-center gap-1">
-          <button className="px-2 py-1 bg-muted rounded hover:bg-muted/80">←</button>
-          <button className="px-2 py-1 bg-primary text-primary-foreground rounded">1</button>
-          <button className="px-2 py-1 bg-muted rounded hover:bg-muted/80">2</button>
-          <button className="px-2 py-1 bg-muted rounded hover:bg-muted/80">→</button>
-        </div>
+        <span>Показано {filtered.length} из {leads.length} лидов</span>
       </div>
     </div>
   );
@@ -500,10 +656,16 @@ function Integrations() {
 export default function Index() {
   const [activePage, setActivePage] = useState("dashboard");
   const [sidebarOpen, setSidebarOpen] = useState(true);
+  const [showAddModal, setShowAddModal] = useState(false);
+  const { leads, loading, refetch } = useLeads();
+
+  const openAdd = () => setShowAddModal(true);
+  const closeAdd = () => setShowAddModal(false);
+  const handleSaved = () => { closeAdd(); refetch(); };
 
   const pages: Record<string, JSX.Element> = {
-    dashboard: <Dashboard />,
-    leads: <Leads />,
+    dashboard: <Dashboard leads={leads} loading={loading} />,
+    leads: <Leads leads={leads} loading={loading} onAdd={openAdd} />,
     analytics: <Analytics />,
     integrations: <Integrations />,
   };
@@ -600,7 +762,7 @@ export default function Index() {
                 </p>
               </div>
               {activePage === "leads" && (
-                <button className="flex items-center gap-2 bg-primary text-primary-foreground text-sm px-4 py-2 rounded hover:bg-primary/90 transition-colors font-medium">
+                <button onClick={openAdd} className="flex items-center gap-2 bg-primary text-primary-foreground text-sm px-4 py-2 rounded hover:bg-primary/90 transition-colors font-medium">
                   <Icon name="Plus" size={15} />
                   Добавить лид
                 </button>
@@ -610,6 +772,10 @@ export default function Index() {
           </div>
         </main>
       </div>
+
+      {showAddModal && (
+        <AddLeadModal onClose={closeAdd} onSaved={handleSaved} />
+      )}
     </div>
   );
 }

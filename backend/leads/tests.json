@@ -1,0 +1,29 @@
+{
+  "tests": [
+    {
+      "name": "GET список лидов",
+      "method": "GET",
+      "path": "/",
+      "expectedStatus": 200,
+      "expectedBody": {"leads": [{"id": 1}]},
+      "bodyMatcher": "partial"
+    },
+    {
+      "name": "POST создать лид",
+      "method": "POST",
+      "path": "/",
+      "body": {
+        "company_name": "ООО Тест",
+        "contact_name": "Иванов И.И.",
+        "phone": "+7 (999) 000-00-00",
+        "email": "test@test.ru",
+        "source": "Сайт",
+        "amount": 500000,
+        "notes": "Тестовый лид"
+      },
+      "expectedStatus": 201,
+      "expectedBody": {"success": true},
+      "bodyMatcher": "partial"
+    }
+  ]
+}
