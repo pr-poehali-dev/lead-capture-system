@@ -564,7 +564,7 @@ function ParserModule() {
               : (
                 <table className="w-full">
                   <thead><tr className="border-b border-border">
-                    {["Телефон","Email","Имя","VK","Telegram","Страница"].map(h => (
+                    {["Телефон","Email","Контекст","VK","Telegram","Страница"].map(h => (
                       <th key={h} className="text-left text-xs text-muted-foreground uppercase tracking-widest px-4 py-3 font-medium">{h}</th>
                     ))}
                   </tr></thead>
