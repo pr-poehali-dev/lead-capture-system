@@ -167,6 +167,7 @@ function WidgetModule() {
   const [saving, setSaving] = useState(false);
   const [copied, setCopied] = useState("");
   const [tab, setTab] = useState<"setup"|"leads">("setup");
+  const { sending: crmSending, sent: crmSent, send: sendCrm } = useCrmSend();
 
   const fetchWidgets = useCallback(async () => {
     const r = await fetch(`${WIDGET_URL}?action=list`);
@@ -323,7 +324,7 @@ function WidgetModule() {
                     : (
                       <table className="w-full">
                         <thead><tr className="border-b border-border">
-                          {["Телефон","Email","Имя","Конкурент","UTM","Дата"].map(h => (
+                          {["Телефон","Email","Имя","Конкурент","UTM","Дата","CRM"].map(h => (
                             <th key={h} className="text-left text-xs text-muted-foreground uppercase tracking-widest px-3 py-2 font-medium">{h}</th>
                           ))}
                         </tr></thead>
@@ -335,6 +336,17 @@ function WidgetModule() {
                             <td className="px-3 py-2.5 text-xs text-muted-foreground">{l.competitor_source||"—"}</td>
                             <td className="px-3 py-2.5 text-xs text-muted-foreground">{l.utm_source||"—"}</td>
                             <td className="px-3 py-2.5 text-xs font-mono text-muted-foreground">{l.created_at}</td>
+                            <td className="px-3 py-2.5">
+                              {crmSent.has(l.id)
+                                ? <span className="text-xs text-emerald-400 flex items-center gap-1"><Icon name="Check" size={12} /> Отправлен</span>
+                                : <button onClick={() => sendCrm(l.id, l.phone, l.name, `Виджет. Конкурент: ${l.competitor_source||"—"}. Страница: ${l.page_url||"—"}`)}
+                                    disabled={crmSending === l.id}
+                                    className="flex items-center gap-1 text-xs px-2 py-1 bg-primary/10 text-primary hover:bg-primary/20 rounded transition-colors disabled:opacity-50">
+                                    {crmSending === l.id ? <Icon name="Loader2" size={11} className="animate-spin" /> : <Icon name="Send" size={11} />}
+                                    В CRM
+                                  </button>
+                              }
+                            </td>
                           </tr>
                         ))}</tbody>
                       </table>
