@@ -1,0 +1,23 @@
+{
+  "tests": [
+    {
+      "name": "GET список задач",
+      "method": "GET",
+      "path": "/",
+      "expectedStatus": 200,
+      "expectedBody": {"tasks": []},
+      "bodyMatcher": "partial"
+    },
+    {
+      "name": "POST парсинг сайта",
+      "method": "POST",
+      "path": "/",
+      "body": {
+        "urls": "https://example.com"
+      },
+      "expectedStatus": 200,
+      "expectedBody": {"success": true},
+      "bodyMatcher": "partial"
+    }
+  ]
+}
