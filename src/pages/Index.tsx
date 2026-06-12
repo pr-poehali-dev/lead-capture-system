@@ -4,6 +4,43 @@ import Icon from "@/components/ui/icon";
 const WIDGET_URL = "https://functions.poehali.dev/8c88693e-a95b-423b-93a3-bf0b61b0e579";
 const MONITOR_URL = "https://functions.poehali.dev/6fd4c8bd-5191-496b-bfcd-ed698a11e3a0";
 const PARSER_URL = "https://functions.poehali.dev/359a7d15-a09f-4779-8859-b2b192d2ce4b";
+const CRM_URL = "https://functions.poehali.dev/4a217c7b-f5ab-4bd1-a924-199e40b8a6e0";
+
+// ─── CRM INTEGRATION ─────────────────────────────────────────────────────────
+async function sendToCrm(phone: string|null, name: string|null, notes: string): Promise<boolean> {
+  try {
+    const res = await fetch(CRM_URL, {
+      method: "POST",
+      headers: { "Content-Type": "application/json" },
+      body: JSON.stringify({
+        action: "create",
+        fullName: name || "Лид из ContactHunter",
+        phone: phone || "",
+        notes: notes,
+        source: "ContactHunter",
+        createdAt: new Date().toISOString(),
+      }),
+    });
+    return res.ok;
+  } catch {
+    return false;
+  }
+}
+
+function useCrmSend() {
+  const [sending, setSending] = useState<number|null>(null);
+  const [sent, setSent] = useState<Set<number>>(new Set());
+
+  const send = async (id: number, phone: string|null, name: string|null, notes: string) => {
+    setSending(id);
+    const ok = await sendToCrm(phone, name, notes);
+    setSending(null);
+    if (ok) setSent(prev => new Set(prev).add(id));
+    return ok;
+  };
+
+  return { sending, sent, send };
+}
 
 // ─── TYPES ────────────────────────────────────────────────────────────────────
 interface WidgetItem { id: number; name: string; site_url: string; competitors: string; token: string; created_at: string; }
@@ -324,6 +361,7 @@ function MonitorModule() {
   const [showCreate, setShowCreate] = useState(false);
   const [form, setForm] = useState({ competitor_name: "", keywords: "" });
   const [running, setRunning] = useState<number|null>(null);
+  const { sending: crmSending, sent: crmSent, send: sendCrm } = useCrmSend();
 
   const fetchTasks = useCallback(async () => {
     const r = await fetch(MONITOR_URL); const d = await r.json(); setTasks(d.tasks||[]);
@@ -347,6 +385,19 @@ function MonitorModule() {
     setRunning(null); fetchTasks(); if (selected?.id === id) fetchLeads(id);
   };
 
+  const runAll = async () => {
+    setRunning(-1);
+    await fetch(`${MONITOR_URL}?action=autorun`, { method: "POST" });
+    setRunning(null); fetchTasks();
+  };
+
+  const deleteTask = async (id: number) => {
+    if (!confirm("Удалить задачу и все её лиды?")) return;
+    await fetch(`${MONITOR_URL}?action=delete&task_id=${id}`, { method: "POST" });
+    if (selected?.id === id) setSelected(null);
+    fetchTasks();
+  };
+
   return (
     <div className="animate-fade-in space-y-4">
       <div className="bg-card card-glow rounded-lg p-4 border-l-2 border-amber-500">
@@ -358,11 +409,19 @@ function MonitorModule() {
         </div>
       </div>
 
-      <div className="flex items-center justify-between">
+      <div className="flex items-center justify-between gap-2 flex-wrap">
         <h3 className="text-sm font-semibold text-foreground">Задачи мониторинга</h3>
-        <button onClick={() => setShowCreate(true)} className="flex items-center gap-2 bg-primary text-primary-foreground text-xs px-3 py-2 rounded hover:bg-primary/90 transition-colors font-medium">
-          <Icon name="Plus" size={14} /> Добавить конкурента
-        </button>
+        <div className="flex items-center gap-2">
+          {tasks.length > 0 && (
+            <button onClick={runAll} disabled={running === -1}
+              className="flex items-center gap-1.5 bg-muted text-muted-foreground hover:text-foreground text-xs px-3 py-2 rounded transition-colors font-medium disabled:opacity-50">
+              {running === -1 ? <><Icon name="Loader2" size={13} className="animate-spin"/>Запускаем все...</> : <><Icon name="PlayCircle" size={13}/>Запустить все</>}
+            </button>
+          )}
+          <button onClick={() => setShowCreate(true)} className="flex items-center gap-2 bg-primary text-primary-foreground text-xs px-3 py-2 rounded hover:bg-primary/90 transition-colors font-medium">
+            <Icon name="Plus" size={14} /> Добавить конкурента
+          </button>
+        </div>
       </div>
 
       {showCreate && (
@@ -403,9 +462,13 @@ function MonitorModule() {
               </div>
               <div className="flex items-center gap-2 flex-shrink-0">
                 <Badge label={task.status==="done"?"Готово":"Ожидание"} type={task.status==="done"?"ok":"muted"} />
-                <button onClick={() => runTask(task.id)} disabled={running === task.id}
+                <button onClick={() => runTask(task.id)} disabled={running === task.id || running === -1}
                   className="flex items-center gap-1.5 text-xs px-3 py-1.5 bg-primary text-primary-foreground rounded hover:bg-primary/90 disabled:opacity-50 transition-colors">
                   {running===task.id ? <><Icon name="Loader2" size={12} className="animate-spin"/>Ищем...</> : <><Icon name="Play" size={12}/>Запустить</>}
+                </button>
+                <button onClick={e => { e.stopPropagation(); deleteTask(task.id); }}
+                  className="w-7 h-7 flex items-center justify-center rounded text-muted-foreground hover:text-destructive hover:bg-destructive/10 transition-colors" title="Удалить">
+                  <Icon name="Trash2" size={13}/>
                 </button>
               </div>
             </div>
@@ -425,7 +488,7 @@ function MonitorModule() {
                       </div>
                       <table className="w-full">
                         <thead><tr className="border-b border-border">
-                          {["Источник","Автор","Телефон","Email","Намерение","Текст"].map(h => (
+                          {["Источник","Автор","Телефон","Email","Намерение","Текст","CRM"].map(h => (
                             <th key={h} className="text-left text-xs text-muted-foreground uppercase tracking-widest px-3 py-2 font-medium">{h}</th>
                           ))}
                         </tr></thead>
@@ -437,6 +500,17 @@ function MonitorModule() {
                             <td className="px-3 py-2.5 text-sm text-blue-400">{l.email||"—"}</td>
                             <td className="px-3 py-2.5"><ScoreBar score={l.intent_score} /></td>
                             <td className="px-3 py-2.5 text-xs text-muted-foreground max-w-[200px] truncate">{l.text||"—"}</td>
+                            <td className="px-3 py-2.5">
+                              {crmSent.has(l.id)
+                                ? <span className="text-xs text-emerald-400 flex items-center gap-1"><Icon name="Check" size={12}/>Добавлен</span>
+                                : <button onClick={() => sendCrm(l.id, l.phone, l.author_name, `Источник: ${l.source}. ${l.text||""}`)}
+                                    disabled={crmSending === l.id}
+                                    className="flex items-center gap-1 text-xs px-2 py-1 bg-primary/10 text-primary rounded hover:bg-primary/20 transition-colors disabled:opacity-50">
+                                    {crmSending === l.id ? <Icon name="Loader2" size={11} className="animate-spin"/> : <Icon name="Send" size={11}/>}
+                                    В CRM
+                                  </button>
+                              }
+                            </td>
                           </tr>
                         ))}</tbody>
                       </table>
@@ -464,6 +538,7 @@ function ParserModule() {
   const [filter, setFilter] = useState("all");
   const [search, setSearch] = useState("");
   const [error, setError] = useState("");
+  const { sending: crmSending, sent: crmSent, send: sendCrm } = useCrmSend();
 
   const fetchTasks = useCallback(async () => {
     const r = await fetch(PARSER_URL); const d = await r.json(); setTasks(d.tasks||[]);
@@ -580,7 +655,7 @@ function ParserModule() {
               : (
                 <table className="w-full">
                   <thead><tr className="border-b border-border">
-                    {["Телефон","Email","Контекст","VK","Telegram","Страница"].map(h => (
+                    {["Телефон","Email","Контекст","VK","Telegram","Страница","CRM"].map(h => (
                       <th key={h} className="text-left text-xs text-muted-foreground uppercase tracking-widest px-4 py-3 font-medium">{h}</th>
                     ))}
                   </tr></thead>
@@ -592,6 +667,17 @@ function ParserModule() {
                       <td className="px-4 py-2.5">{c.social_vk ? <a href={c.social_vk} target="_blank" rel="noopener noreferrer" className="text-xs text-violet-400 hover:underline">VK</a> : <span className="text-muted-foreground text-xs">—</span>}</td>
                       <td className="px-4 py-2.5">{c.social_tg ? <a href={c.social_tg.startsWith("http")?c.social_tg:`https://t.me/${c.social_tg.replace("@","")}`} target="_blank" rel="noopener noreferrer" className="text-xs text-sky-400 hover:underline">TG</a> : <span className="text-muted-foreground text-xs">—</span>}</td>
                       <td className="px-4 py-2.5"><a href={c.raw_page_url} target="_blank" rel="noopener noreferrer" className="text-xs text-muted-foreground hover:text-foreground truncate block max-w-[130px]">{c.raw_page_url.replace(/^https?:\/\//,"").split("/")[0]}</a></td>
+                      <td className="px-4 py-2.5">
+                        {crmSent.has(c.id)
+                          ? <span className="text-xs text-emerald-400 flex items-center gap-1"><Icon name="Check" size={12}/>Добавлен</span>
+                          : <button onClick={() => sendCrm(c.id, c.phone, c.name, `Парсер: ${c.raw_page_url}`)}
+                              disabled={crmSending === c.id}
+                              className="flex items-center gap-1 text-xs px-2 py-1 bg-primary/10 text-primary rounded hover:bg-primary/20 transition-colors disabled:opacity-50">
+                              {crmSending === c.id ? <Icon name="Loader2" size={11} className="animate-spin"/> : <Icon name="Send" size={11}/>}
+                              В CRM
+                            </button>
+                        }
+                      </td>
                     </tr>
                   ))}</tbody>
                 </table>

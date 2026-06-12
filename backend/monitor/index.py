@@ -341,6 +341,32 @@ def handler(event: dict, context) -> dict:
             "body": json.dumps({"success": True, "found": found}, ensure_ascii=False),
         }
 
+    # POST /?action=autorun — запустить все задачи сразу (для автозапуска по расписанию)
+    if method == "POST" and action == "autorun":
+        cur.execute(f"SELECT id, competitor_name, keywords FROM {SCHEMA}.monitor_tasks")
+        all_tasks = cur.fetchall()
+        total_found = 0
+        for t_id, competitor_name, keywords in all_tasks:
+            cur.execute(f"UPDATE {SCHEMA}.monitor_tasks SET status = 'running' WHERE id = %s", (t_id,))
+            conn.commit()
+            found = run_monitoring(t_id, competitor_name, keywords, cur)
+            conn.commit()
+            total_found += found
+        conn.close()
+        return {
+            "statusCode": 200,
+            "headers": json_headers,
+            "body": json.dumps({"success": True, "tasks_run": len(all_tasks), "total_found": total_found}, ensure_ascii=False),
+        }
+
+    # POST /?action=delete&task_id=X — удалить задачу
+    if method == "POST" and action == "delete" and task_id:
+        cur.execute(f"DELETE FROM {SCHEMA}.monitor_leads WHERE task_id = %s", (task_id,))
+        cur.execute(f"DELETE FROM {SCHEMA}.monitor_tasks WHERE id = %s", (task_id,))
+        conn.commit()
+        conn.close()
+        return {"statusCode": 200, "headers": json_headers, "body": json.dumps({"success": True})}
+
     conn.close()
     return {
         "statusCode": 400,
