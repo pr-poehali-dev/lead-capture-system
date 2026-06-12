@@ -13,12 +13,10 @@ async function sendToCrm(phone: string|null, name: string|null, notes: string): 
       method: "POST",
       headers: { "Content-Type": "application/json" },
       body: JSON.stringify({
-        action: "create",
-        fullName: name || "Лид из ContactHunter",
+        action: "webhook",
+        full_name: name || "Лид из ContactHunter",
         phone: phone || "",
-        notes: notes,
-        is_lead: true,
-        createdAt: new Date().toISOString(),
+        city: notes,
       }),
     });
     return res.ok;
