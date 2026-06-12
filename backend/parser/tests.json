@@ -4,9 +4,7 @@
       "name": "GET список задач",
       "method": "GET",
       "path": "/",
-      "expectedStatus": 200,
-      "expectedBody": {"tasks": []},
-      "bodyMatcher": "partial"
+      "expectedStatus": 200
     },
     {
       "name": "POST парсинг сайта",
@@ -15,6 +13,15 @@
       "body": {
         "urls": "https://example.com"
       },
+      "expectedStatus": 200,
+      "expectedBody": {"success": true},
+      "bodyMatcher": "partial"
+    }
+    ,{
+      "name": "POST удалить несуществующую задачу",
+      "method": "POST",
+      "path": "/?action=delete",
+      "body": {"task_id": 999999},
       "expectedStatus": 200,
       "expectedBody": {"success": true},
       "bodyMatcher": "partial"

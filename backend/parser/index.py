@@ -207,6 +207,22 @@ def handler(event: dict, context) -> dict:
         conn.close()
         return {'statusCode': 200, 'headers': headers, 'body': json.dumps({'tasks': tasks, 'contacts': contacts}, ensure_ascii=False)}
 
+    # POST /?action=delete — удалить задачу и контакты
+    if method == 'POST':
+        body = json.loads(event.get('body') or '{}')
+        action = (event.get('queryStringParameters') or {}).get('action', '')
+        if action == 'delete':
+            task_id = body.get('task_id')
+            if not task_id:
+                return {'statusCode': 400, 'headers': headers, 'body': json.dumps({'error': 'task_id обязателен'}, ensure_ascii=False)}
+            conn = get_conn()
+            cur = conn.cursor()
+            cur.execute(f"DELETE FROM {SCHEMA}.contacts WHERE task_id = %s", (task_id,))
+            cur.execute(f"DELETE FROM {SCHEMA}.parse_tasks WHERE id = %s", (task_id,))
+            conn.commit()
+            conn.close()
+            return {'statusCode': 200, 'headers': headers, 'body': json.dumps({'success': True}, ensure_ascii=False)}
+
     # POST / — запустить парсинг одного или списка URL
     if method == 'POST':
         body = json.loads(event.get('body') or '{}')

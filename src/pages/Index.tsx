@@ -587,6 +587,13 @@ function ParserModule() {
 
   const doneTasks = tasks.filter(t => t.status==="done");
 
+  const deleteTask = async (id: number) => {
+    if (!confirm("Удалить задачу и все найденные контакты?")) return;
+    await fetch(`${PARSER_URL}?action=delete`, { method: "POST", headers: {"Content-Type":"application/json"}, body: JSON.stringify({ task_id: id }) });
+    if (selectedId === id) { setSelectedId(null); setContacts([]); }
+    fetchTasks();
+  };
+
   return (
     <div className="animate-fade-in space-y-4">
       <div className="grid lg:grid-cols-2 gap-4">
@@ -625,13 +632,19 @@ function ParserModule() {
             ? <EmptyState icon="History" text="Нет задач" sub="Запустите парсинг" />
             : <div className="space-y-1.5">
                 {doneTasks.slice(0,8).map(t => (
-                  <button key={t.id} onClick={() => { setSelectedId(t.id); fetchContacts(t.id); }}
-                    className={`w-full flex items-center justify-between px-3 py-2 rounded text-left transition-colors ${selectedId===t.id ? "bg-primary/10 border border-primary/30" : "bg-muted hover:bg-muted/80"}`}>
-                    <span className="text-xs text-foreground truncate max-w-[200px]">
-                      {(() => { try { return new URL(t.url.startsWith("http")?t.url:"https://"+t.url).hostname; } catch { return t.url; } })()}
-                    </span>
-                    <span className="text-xs font-mono text-muted-foreground flex-shrink-0 ml-2">{t.finished_at||t.created_at}</span>
-                  </button>
+                  <div key={t.id} className={`flex items-center gap-1 rounded ${selectedId===t.id ? "bg-primary/10 border border-primary/30" : "bg-muted"}`}>
+                    <button onClick={() => { setSelectedId(t.id); fetchContacts(t.id); }}
+                      className="flex-1 flex items-center justify-between px-3 py-2 text-left transition-colors hover:opacity-80 min-w-0">
+                      <span className="text-xs text-foreground truncate max-w-[160px]">
+                        {(() => { try { return new URL(t.url.startsWith("http")?t.url:"https://"+t.url).hostname; } catch { return t.url; } })()}
+                      </span>
+                      <span className="text-xs font-mono text-muted-foreground flex-shrink-0 ml-2">{t.finished_at||t.created_at}</span>
+                    </button>
+                    <button onClick={e => { e.stopPropagation(); deleteTask(t.id); }}
+                      className="w-7 h-7 flex items-center justify-center rounded text-muted-foreground hover:text-destructive hover:bg-destructive/10 transition-colors flex-shrink-0 mr-1">
+                      <Icon name="Trash2" size={13}/>
+                    </button>
+                  </div>
                 ))}
               </div>
           }
