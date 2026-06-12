@@ -1,0 +1,21 @@
+{
+  "tests": [
+    {
+      "method": "GET",
+      "path": "/?action=list",
+      "expectedStatus": 200,
+      "expectedBodyContains": {"widgets": []}
+    },
+    {
+      "method": "POST",
+      "path": "/?action=create",
+      "body": {
+        "name": "Test Widget",
+        "site_url": "https://example.com",
+        "competitors": "competitor1.ru, competitor2.ru"
+      },
+      "expectedStatus": 200,
+      "expectedBodyContains": {"token": "string"}
+    }
+  ]
+}

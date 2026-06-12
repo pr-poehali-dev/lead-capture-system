@@ -1,0 +1,20 @@
+{
+  "tests": [
+    {
+      "method": "GET",
+      "path": "/",
+      "expectedStatus": 200,
+      "expectedBodyContains": {"tasks": []}
+    },
+    {
+      "method": "POST",
+      "path": "/?action=create",
+      "body": {
+        "competitor_name": "TestCompetitor",
+        "keywords": "альтернатива замена"
+      },
+      "expectedStatus": 200,
+      "expectedBodyContains": {"id": 1}
+    }
+  ]
+}

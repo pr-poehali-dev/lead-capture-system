@@ -1,4 +1,6 @@
 {
+  "monitor": "https://functions.poehali.dev/6fd4c8bd-5191-496b-bfcd-ed698a11e3a0",
+  "widget": "https://functions.poehali.dev/8c88693e-a95b-423b-93a3-bf0b61b0e579",
   "parser": "https://functions.poehali.dev/359a7d15-a09f-4779-8859-b2b192d2ce4b",
   "leads": "https://functions.poehali.dev/d95cf66f-0e0c-4618-9f44-457254468c3f"
 }
