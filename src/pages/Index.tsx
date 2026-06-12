@@ -547,6 +547,7 @@ function ParserModule() {
   const [singleUrl, setSingleUrl] = useState("");
   const [bulkUrls, setBulkUrls] = useState("");
   const [running, setRunning] = useState(false);
+  const [progress, setProgress] = useState({ current: 0, total: 0 });
   const [tasks, setTasks] = useState<ParseTask[]>([]);
   const [contacts, setContacts] = useState<ParseContact[]>([]);
   const [selectedId, setSelectedId] = useState<number|null>(null);
@@ -571,11 +572,18 @@ function ParserModule() {
   const run = async () => {
     const urls = mode==="single" ? [singleUrl.trim()].filter(Boolean) : bulkUrls.split("\n").map(u=>u.trim()).filter(Boolean);
     if (!urls.length) { setError("Введите URL"); return; }
-    setError(""); setRunning(true);
-    const r = await fetch(PARSER_URL, { method:"POST", headers:{"Content-Type":"application/json"}, body: JSON.stringify({urls: urls.join("\n")}) });
-    const d = await r.json(); setRunning(false);
-    if (d.success) { setSingleUrl(""); setBulkUrls(""); fetchTasks(); setSelectedId(d.task_ids[0]); fetchContacts(d.task_ids[0]); }
-    else setError(d.error||"Ошибка");
+    setError(""); setRunning(true); setProgress({ current: 0, total: urls.length });
+    let lastTaskId: number|null = null;
+    for (let i = 0; i < urls.length; i++) {
+      setProgress({ current: i + 1, total: urls.length });
+      const r = await fetch(PARSER_URL, { method:"POST", headers:{"Content-Type":"application/json"}, body: JSON.stringify({urls: urls[i]}) });
+      const d = await r.json();
+      if (d.success && d.task_ids?.[0]) lastTaskId = d.task_ids[0];
+      else if (!d.success) setError(d.error||"Ошибка на одном из URL");
+    }
+    setRunning(false); setProgress({ current: 0, total: 0 });
+    setSingleUrl(""); setBulkUrls(""); fetchTasks();
+    if (lastTaskId) { setSelectedId(lastTaskId); fetchContacts(lastTaskId); }
   };
 
   const filtered = contacts.filter(c => {
@@ -619,7 +627,11 @@ function ParserModule() {
           }
           {error && <div className="text-xs text-destructive bg-destructive/10 rounded px-3 py-2 flex items-center gap-2"><Icon name="AlertCircle" size={12}/>{error}</div>}
           <button onClick={run} disabled={running} className="w-full flex items-center justify-center gap-2 bg-primary text-primary-foreground py-2.5 rounded text-sm font-medium hover:bg-primary/90 disabled:opacity-60 transition-colors">
-            {running ? <><Icon name="Loader2" size={14} className="animate-spin"/>Парсим...</> : <><Icon name="Zap" size={14}/>Запустить</>}
+            {running
+              ? <><Icon name="Loader2" size={14} className="animate-spin"/>
+                  {progress.total > 1 ? `Парсим ${progress.current} из ${progress.total}...` : "Парсим..."}
+                </>
+              : <><Icon name="Zap" size={14}/>Запустить</>}
           </button>
         </div>
 
