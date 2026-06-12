@@ -18,6 +18,7 @@ const NAV = [
   { id: "widget", label: "Виджет", icon: "Code2" },
   { id: "monitor", label: "Мониторинг", icon: "Radio" },
   { id: "parser", label: "Парсер сайтов", icon: "ScanSearch" },
+  { id: "help", label: "Инструкция", icon: "BookOpen" },
 ];
 
 // ─── HELPERS ──────────────────────────────────────────────────────────────────
@@ -587,13 +588,165 @@ function ParserModule() {
   );
 }
 
+// ─── HELP MODULE ─────────────────────────────────────────────────────────────
+function HelpModule() {
+  const [open, setOpen] = useState<number|null>(0);
+
+  const sections = [
+    {
+      icon: "LayoutDashboard",
+      color: "text-blue-400 bg-blue-400/10",
+      title: "Дашборд",
+      short: "Главная страница со статистикой",
+      content: (
+        <div className="space-y-2 text-sm text-muted-foreground leading-relaxed">
+          <p>Дашборд показывает общую статистику по всем трём модулям: сколько виджетов активно, лидов собрано, задач запущено.</p>
+          <p>Нажмите на любую карточку или блок модуля — перейдёте в нужный раздел.</p>
+        </div>
+      ),
+    },
+    {
+      icon: "Code2",
+      color: "text-emerald-400 bg-emerald-400/10",
+      title: "Виджет перехвата",
+      short: "Собирает лидов с ваших форм",
+      content: (
+        <div className="space-y-3 text-sm text-muted-foreground leading-relaxed">
+          <p><span className="text-foreground font-medium">Суть:</span> человек побывал на сайте конкурента, потом зашёл на <span className="text-foreground">ваш</span> сайт и заполнил форму — его контакт автоматически сохраняется.</p>
+          <div className="space-y-2">
+            <p className="text-foreground font-medium text-xs uppercase tracking-widest">Как настроить:</p>
+            {["Откройте раздел «Виджет»", "Нажмите «Новый виджет»", "Укажите название, URL вашего сайта и сайты конкурентов (можно оставить пустым — тогда ловим всех)", "Нажмите «Создать»", "Скопируйте строку кода и вставьте на ваш сайт перед тегом </body>"].map((s, i) => (
+              <div key={i} className="flex items-start gap-2.5">
+                <div className="w-5 h-5 rounded-full bg-primary/20 text-primary flex items-center justify-center text-xs font-mono flex-shrink-0 mt-0.5">{i+1}</div>
+                <span>{s}</span>
+              </div>
+            ))}
+          </div>
+          <div className="bg-muted/50 rounded p-3 text-xs">
+            <span className="text-foreground font-medium">Результат:</span> вкладка «Лиды» внутри виджета — телефон, email, имя и с какого сайта пришёл человек.
+          </div>
+        </div>
+      ),
+    },
+    {
+      icon: "Radio",
+      color: "text-amber-400 bg-amber-400/10",
+      title: "Мониторинг источников",
+      short: "Ищет горячих лидов в интернете",
+      content: (
+        <div className="space-y-3 text-sm text-muted-foreground leading-relaxed">
+          <p><span className="text-foreground font-medium">Суть:</span> система сама ищет в Яндексе, 2ГИС и соцсетях людей, которые упоминают конкурентов и ищут альтернативу.</p>
+          <div className="space-y-2">
+            <p className="text-foreground font-medium text-xs uppercase tracking-widest">Как использовать:</p>
+            {[
+              "Откройте раздел «Мониторинг»",
+              "Нажмите «Добавить конкурента»",
+              'Укажите название конкурента и ключевые слова — что пишут недовольные клиенты, например: "ищу альтернативу, недоволен, порекомендуйте"',
+              "Нажмите «Создать», затем «Запустить»",
+              "Дождитесь результатов — обычно 10–30 секунд",
+            ].map((s, i) => (
+              <div key={i} className="flex items-start gap-2.5">
+                <div className="w-5 h-5 rounded-full bg-primary/20 text-primary flex items-center justify-center text-xs font-mono flex-shrink-0 mt-0.5">{i+1}</div>
+                <span>{s}</span>
+              </div>
+            ))}
+          </div>
+          <div className="bg-muted/50 rounded p-3 text-xs">
+            <span className="text-foreground font-medium">Оценка намерения (0–100):</span> чем выше цифра — тем горячее лид. 80+ означает, что человек прямо сейчас ищет замену конкуренту.
+          </div>
+        </div>
+      ),
+    },
+    {
+      icon: "ScanSearch",
+      color: "text-violet-400 bg-violet-400/10",
+      title: "Парсер сайтов",
+      short: "Извлекает контакты с сайтов конкурентов",
+      content: (
+        <div className="space-y-3 text-sm text-muted-foreground leading-relaxed">
+          <p><span className="text-foreground font-medium">Суть:</span> вводите адрес сайта конкурента — система обходит все страницы и собирает телефоны, email, имена, ВКонтакте и Telegram.</p>
+          <div className="space-y-2">
+            <p className="text-foreground font-medium text-xs uppercase tracking-widest">Как использовать:</p>
+            {[
+              'Откройте раздел «Парсер сайтов»',
+              '«Один сайт» — вставьте один URL. «Список» — несколько URL каждый с новой строки (до 20)',
+              "Нажмите «Запустить» и подождите 10–30 секунд",
+              "Используйте фильтры: Телефоны / Email / Соцсети",
+              "Нажмите «CSV» для выгрузки в Excel",
+            ].map((s, i) => (
+              <div key={i} className="flex items-start gap-2.5">
+                <div className="w-5 h-5 rounded-full bg-primary/20 text-primary flex items-center justify-center text-xs font-mono flex-shrink-0 mt-0.5">{i+1}</div>
+                <span>{s}</span>
+              </div>
+            ))}
+          </div>
+          <div className="bg-muted/50 rounded p-3 text-xs">
+            <span className="text-foreground font-medium">История задач</span> справа — можно вернуться к результатам любого прошлого парсинга.
+          </div>
+        </div>
+      ),
+    },
+    {
+      icon: "Download",
+      color: "text-sky-400 bg-sky-400/10",
+      title: "Экспорт контактов",
+      short: "Выгрузка в Excel/CSV",
+      content: (
+        <div className="space-y-2 text-sm text-muted-foreground leading-relaxed">
+          <p>В каждом модуле есть кнопка <span className="text-foreground font-medium">«Скачать CSV»</span> — нажмите её, чтобы выгрузить все найденные контакты.</p>
+          <p>Файл открывается в Excel, Google Таблицах или любой CRM-системе. Разделитель — точка с запятой (;), кодировка UTF-8.</p>
+        </div>
+      ),
+    },
+  ];
+
+  return (
+    <div className="animate-fade-in max-w-2xl space-y-3">
+      <div className="bg-card card-glow rounded-lg p-5 border-l-2 border-primary mb-6">
+        <div className="flex items-start gap-3">
+          <Icon name="BookOpen" size={16} className="text-primary mt-0.5 flex-shrink-0" />
+          <div>
+            <div className="text-sm font-semibold text-foreground mb-1">Как работает ContactHunter</div>
+            <p className="text-xs text-muted-foreground leading-relaxed">
+              Три модуля для сбора контактов потенциальных клиентов. Нажмите на любой раздел ниже, чтобы прочитать подробную инструкцию.
+            </p>
+          </div>
+        </div>
+      </div>
+
+      {sections.map((s, i) => (
+        <div key={i} className={`bg-card card-glow rounded-lg overflow-hidden border transition-colors ${open === i ? "border-primary/30" : "border-transparent"}`}>
+          <button onClick={() => setOpen(open === i ? null : i)}
+            className="w-full flex items-center justify-between gap-4 p-4 text-left">
+            <div className="flex items-center gap-3">
+              <div className={`w-8 h-8 rounded flex items-center justify-center flex-shrink-0 ${s.color}`}>
+                <Icon name={s.icon} size={15} />
+              </div>
+              <div>
+                <div className="text-sm font-medium text-foreground">{s.title}</div>
+                <div className="text-xs text-muted-foreground">{s.short}</div>
+              </div>
+            </div>
+            <Icon name={open === i ? "ChevronUp" : "ChevronDown"} size={15} className="text-muted-foreground flex-shrink-0" />
+          </button>
+          {open === i && (
+            <div className="px-5 pb-5 border-t border-border pt-4">
+              {s.content}
+            </div>
+          )}
+        </div>
+      ))}
+    </div>
+  );
+}
+
 // ─── APP ──────────────────────────────────────────────────────────────────────
 export default function Index() {
   const [page, setPage] = useState("dashboard");
   const [sidebarOpen, setSidebarOpen] = useState(true);
 
-  const titles: Record<string,string> = { dashboard:"Дашборд", widget:"Виджет перехвата", monitor:"Мониторинг источников", parser:"Парсер сайтов" };
-  const content: Record<string,JSX.Element> = { dashboard:<Dashboard onNav={setPage}/>, widget:<WidgetModule/>, monitor:<MonitorModule/>, parser:<ParserModule/> };
+  const titles: Record<string,string> = { dashboard:"Дашборд", widget:"Виджет перехвата", monitor:"Мониторинг источников", parser:"Парсер сайтов", help:"Инструкция" };
+  const content: Record<string,JSX.Element> = { dashboard:<Dashboard onNav={setPage}/>, widget:<WidgetModule/>, monitor:<MonitorModule/>, parser:<ParserModule/>, help:<HelpModule/> };
 
   return (
     <div className="flex h-screen bg-background overflow-hidden grid-bg">
