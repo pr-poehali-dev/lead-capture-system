@@ -8,21 +8,21 @@ const CRM_URL = "https://functions.poehali.dev/4a217c7b-f5ab-4bd1-a924-199e40b8a
 
 // ─── CRM INTEGRATION ─────────────────────────────────────────────────────────
 async function sendToCrm(phone: string|null, name: string|null, notes: string): Promise<boolean> {
-  try {
-    const res = await fetch(CRM_URL, {
-      method: "POST",
-      headers: { "Content-Type": "application/json" },
-      body: JSON.stringify({
-        action: "webhook",
-        full_name: name || "Лид из ContactHunter",
-        phone: phone || "",
-        city: notes,
-      }),
-    });
-    return res.ok;
-  } catch {
-    return false;
-  }
+  const payload = {
+    action: "webhook",
+    full_name: name || "Лид из ContactHunter",
+    phone: phone || "",
+    city: notes,
+  };
+  console.log("[CRM] Отправляю:", payload);
+  const res = await fetch(CRM_URL, {
+    method: "POST",
+    headers: { "Content-Type": "application/json" },
+    body: JSON.stringify(payload),
+  });
+  const data = await res.json().catch(() => ({}));
+  console.log("[CRM] Ответ:", res.status, data);
+  return res.ok;
 }
 
 function useCrmSend() {
