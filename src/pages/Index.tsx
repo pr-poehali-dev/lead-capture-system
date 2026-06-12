@@ -17,7 +17,7 @@ async function sendToCrm(phone: string|null, name: string|null, notes: string): 
         fullName: name || "Лид из ContactHunter",
         phone: phone || "",
         notes: notes,
-        source: "ContactHunter",
+        is_lead: true,
         createdAt: new Date().toISOString(),
       }),
     });
