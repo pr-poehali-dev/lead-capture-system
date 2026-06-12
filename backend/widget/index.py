@@ -228,6 +228,19 @@ def handler(event: dict, context) -> dict:
             "body": json.dumps({"leads": leads}, ensure_ascii=False),
         }
 
+    # POST /?action=delete — удалить виджет
+    if method == "POST" and action == "delete":
+        body = json.loads(event.get("body") or "{}")
+        widget_id = body.get("widget_id")
+        if not widget_id:
+            conn.close()
+            return {"statusCode": 400, "headers": json_headers, "body": json.dumps({"error": "widget_id обязателен"})}
+        cur.execute(f"DELETE FROM {SCHEMA}.widget_leads WHERE widget_id = %s", (widget_id,))
+        cur.execute(f"DELETE FROM {SCHEMA}.widgets WHERE id = %s", (widget_id,))
+        conn.commit()
+        conn.close()
+        return {"statusCode": 200, "headers": json_headers, "body": json.dumps({"success": True})}
+
     # POST /?action=create — создать виджет
     if method == "POST" and action == "create":
         body = json.loads(event.get("body") or "{}")

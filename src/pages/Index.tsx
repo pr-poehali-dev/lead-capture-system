@@ -160,6 +160,16 @@ function WidgetModule() {
     setCopied(token); setTimeout(() => setCopied(""), 2000);
   };
 
+  const deleteWidget = async (id: number) => {
+    if (!confirm("Удалить виджет? Все лиды тоже будут удалены.")) return;
+    await fetch(`${WIDGET_URL}?action=delete`, {
+      method: "POST", headers: { "Content-Type": "application/json" },
+      body: JSON.stringify({ widget_id: id }),
+    });
+    setSelected(null);
+    fetchWidgets();
+  };
+
   return (
     <div className="animate-fade-in space-y-4">
       <div className="bg-card card-glow rounded-lg p-4 border-l-2 border-blue-500">
@@ -217,6 +227,12 @@ function WidgetModule() {
             </div>
             <div className="flex items-center gap-2 flex-shrink-0">
               <Badge label="Активен" type="ok" />
+              <button
+                onClick={e => { e.stopPropagation(); deleteWidget(w.id); }}
+                className="w-7 h-7 flex items-center justify-center rounded text-muted-foreground hover:text-destructive hover:bg-destructive/10 transition-colors"
+                title="Удалить виджет">
+                <Icon name="Trash2" size={14} />
+              </button>
               <Icon name={selected?.id === w.id ? "ChevronUp" : "ChevronDown"} size={15} className="text-muted-foreground" />
             </div>
           </div>
