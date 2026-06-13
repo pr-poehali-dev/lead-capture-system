@@ -1,4 +1,4 @@
-"""Мониторинг открытых источников: поиск упоминаний конкурентов и людей, ищущих альтернативы."""
+"""Мониторинг открытых источников: поиск кандидатов на контракт с Министерством обороны."""
 import json
 import os
 import re
@@ -16,7 +16,28 @@ CORS_HEADERS = {
 
 PHONE_RE = re.compile(r'(?:\+7|8)[\s\-\(]?\d{3}[\s\-\)]?\d{3}[\s\-]?\d{2}[\s\-]?\d{2}')
 EMAIL_RE = re.compile(r'[a-zA-Z0-9_.+\-]+@[a-zA-Z0-9\-]+\.[a-zA-Z]{2,}')
-INTENT_KEYWORDS = ["ищу альтернативу", "порекомендуйте", "ищу замену"]
+
+INTENT_KEYWORDS = [
+    "хочу заключить контракт", "интересует контракт", "служба по контракту",
+    "хочу служить по контракту", "как заключить контракт", "условия контракта",
+    "сколько платят по контракту", "выплаты по контракту", "контрактная служба",
+    "пойти по контракту", "записаться по контракту", "узнать про контракт",
+    "хочу в армию", "пойти в армию", "служить в армии", "мобилизация",
+    "доброволец", "добровольцем", "вступить в армию",
+]
+
+TELEGRAM_CHANNELS = [
+    "kontraktvka",
+    "kontraktservice",
+    "army_kontract",
+    "voenniy_kontract",
+    "kontraktrf",
+    "svo_kontract",
+    "vmf_kontract",
+    "contract_army_ru",
+    "kontrakт_info",
+    "army_russia_kontract",
+]
 
 def get_conn():
     return psycopg2.connect(os.environ["DATABASE_URL"])
@@ -49,165 +70,218 @@ def ensure_tables(cur):
 
 def calc_intent(text):
     text_lower = text.lower()
+    score = 50
+    matches = 0
     for kw in INTENT_KEYWORDS:
         if kw in text_lower:
-            return 80
-    return 50
+            matches += 1
+    if matches >= 3:
+        score = 95
+    elif matches >= 2:
+        score = 85
+    elif matches >= 1:
+        score = 70
+    return score
 
 def http_get(url, timeout=10):
     req = urllib.request.Request(
         url,
-        headers={"User-Agent": "Mozilla/5.0 (compatible; LeadBot/1.0)"},
+        headers={"User-Agent": "Mozilla/5.0 (Windows NT 10.0; Win64; x64) AppleWebKit/537.36"},
     )
     with urllib.request.urlopen(req, timeout=timeout) as resp:
         return resp.read().decode("utf-8", errors="replace")
 
-def search_yandex(competitor_name, keywords):
-    """Ищет в Яндексе контакты по запросу с именем конкурента и ключевыми словами."""
+def search_yandex(keywords):
+    """Ищет в Яндексе людей, интересующихся службой по контракту."""
     results = []
-    query = urllib.parse.quote_plus(f"{competitor_name} {keywords} отзывы контакты телефон")
-    url = f"https://yandex.ru/search/?text={query}&lr=213"
-    try:
-        html = http_get(url)
-        phones = PHONE_RE.findall(html)
-        emails = EMAIL_RE.findall(html)
-        intent = calc_intent(html)
-        seen = set()
-        for ph in phones:
-            if ph not in seen:
-                seen.add(ph)
-                results.append({
-                    "phone": ph,
-                    "email": "",
-                    "source_name": "Яндекс",
-                    "source_url": url,
-                    "snippet": f"Найден телефон в выдаче Яндекса по запросу: {competitor_name}",
-                    "intent_score": intent,
-                })
-        for em in emails:
-            if em not in seen:
-                seen.add(em)
-                results.append({
-                    "phone": "",
-                    "email": em,
-                    "source_name": "Яндекс",
-                    "source_url": url,
-                    "snippet": f"Найден email в выдаче Яндекса по запросу: {competitor_name}",
-                    "intent_score": intent,
-                })
-    except Exception:
-        pass
-    return results
-
-def search_2gis(competitor_name):
-    """Ищет контакты организации в 2GIS по названию конкурента."""
-    results = []
-    query = urllib.parse.quote_plus(competitor_name)
-    url = (
-        f"https://catalog.api.2gis.com/3.0/items"
-        f"?q={query}&fields=items.contact_groups&key=ruMXgB&page_size=20"
-    )
-    try:
-        raw = http_get(url)
-        data = json.loads(raw)
-        items = data.get("result", {}).get("items", [])
-        for item in items:
-            contact_groups = item.get("contact_groups", [])
-            for group in contact_groups:
-                contacts = group.get("contacts", [])
-                for contact in contacts:
-                    ctype = contact.get("type", "")
-                    value = contact.get("value", "")
-                    if ctype == "phone" and value:
-                        results.append({
-                            "phone": value,
-                            "email": "",
-                            "source_name": "2GIS",
-                            "source_url": f"https://2gis.ru/search/{query}",
-                            "snippet": f"Контакт из 2GIS: {item.get('name', '')}",
-                            "intent_score": 50,
-                        })
-                    elif ctype == "email" and value:
-                        results.append({
-                            "phone": "",
-                            "email": value,
-                            "source_name": "2GIS",
-                            "source_url": f"https://2gis.ru/search/{query}",
-                            "snippet": f"Контакт из 2GIS: {item.get('name', '')}",
-                            "intent_score": 50,
-                        })
-    except Exception:
-        pass
+    queries = [
+        f"{keywords} служба по контракту телефон",
+        f"хочу заключить контракт {keywords}",
+        f"интересует контракт МО {keywords}",
+    ]
+    seen = set()
+    for q in queries:
+        query = urllib.parse.quote_plus(q)
+        url = f"https://yandex.ru/search/?text={query}&lr=0"
+        try:
+            html = http_get(url)
+            phones = PHONE_RE.findall(html)
+            emails = EMAIL_RE.findall(html)
+            intent = calc_intent(html)
+            for ph in phones:
+                ph_clean = ph.strip()
+                if ph_clean not in seen:
+                    seen.add(ph_clean)
+                    results.append({
+                        "phone": ph_clean,
+                        "email": "",
+                        "source_name": "Яндекс",
+                        "source_url": url,
+                        "snippet": f"Найден в выдаче Яндекса по запросу: {q}",
+                        "intent_score": intent,
+                    })
+            for em in emails:
+                em_clean = em.strip()
+                if em_clean not in seen:
+                    seen.add(em_clean)
+                    results.append({
+                        "phone": "",
+                        "email": em_clean,
+                        "source_name": "Яндекс",
+                        "source_url": url,
+                        "snippet": f"Найден email в выдаче Яндекса по запросу: {q}",
+                        "intent_score": intent,
+                    })
+        except Exception:
+            pass
     return results
 
 def search_vk(keywords):
-    """Ищет упоминания в публичных постах ВКонтакте по ключевым словам."""
+    """Ищет в ВКонтакте публичные посты людей, интересующихся контрактной службой."""
     results = []
-    query = urllib.parse.quote_plus(keywords)
-    url = (
-        f"https://api.vk.com/method/newsfeed.search"
-        f"?q={query}&count=20&v=5.131"
-    )
+    vk_queries = [
+        f"служба по контракту {keywords}",
+        f"хочу по контракту {keywords}",
+        f"контракт МО {keywords}",
+    ]
+    seen = set()
+    for q in vk_queries:
+        query = urllib.parse.quote_plus(q)
+        url = (
+            f"https://api.vk.com/method/newsfeed.search"
+            f"?q={query}&count=20&v=5.131"
+        )
+        try:
+            raw = http_get(url)
+            data = json.loads(raw)
+            items = data.get("response", {}).get("items", [])
+            for item in items:
+                text = item.get("text", "")
+                if not text:
+                    continue
+                intent = calc_intent(text)
+                if intent < 60:
+                    continue
+                phones = PHONE_RE.findall(text)
+                emails = EMAIL_RE.findall(text)
+                owner_id = item.get("owner_id", "")
+                post_id = item.get("id", "")
+                post_url = f"https://vk.com/wall{owner_id}_{post_id}" if owner_id and post_id else ""
+                for ph in phones:
+                    if ph not in seen:
+                        seen.add(ph)
+                        results.append({
+                            "phone": ph,
+                            "email": "",
+                            "source_name": "ВКонтакте",
+                            "source_url": post_url,
+                            "snippet": text[:200],
+                            "intent_score": intent,
+                        })
+                for em in emails:
+                    if em not in seen:
+                        seen.add(em)
+                        results.append({
+                            "phone": "",
+                            "email": em,
+                            "source_name": "ВКонтакте",
+                            "source_url": post_url,
+                            "snippet": text[:200],
+                            "intent_score": intent,
+                        })
+        except Exception:
+            pass
+    return results
+
+def search_telegram_channel(channel_username):
+    """Парсит публичный Telegram-канал через веб-версию t.me/s/ без авторизации."""
+    results = []
+    url = f"https://t.me/s/{channel_username}"
     try:
-        raw = http_get(url)
-        data = json.loads(raw)
-        items = data.get("response", {}).get("items", [])
-        for item in items:
-            text = item.get("text", "")
-            if not text:
+        html = http_get(url, timeout=15)
+        message_re = re.compile(
+            r'<div class="tgme_widget_message_text[^"]*"[^>]*>(.*?)</div>',
+            re.DOTALL | re.IGNORECASE,
+        )
+        messages = message_re.findall(html)
+        seen = set()
+        for msg_html in messages:
+            msg_text = re.sub(r'<[^>]+>', ' ', msg_html)
+            msg_text = re.sub(r'\s+', ' ', msg_text).strip()
+            if not msg_text:
                 continue
-            phones = PHONE_RE.findall(text)
-            emails = EMAIL_RE.findall(text)
-            intent = calc_intent(text)
-            post_url = ""
-            owner_id = item.get("owner_id", "")
-            post_id = item.get("id", "")
-            if owner_id and post_id:
-                post_url = f"https://vk.com/wall{owner_id}_{post_id}"
+            intent = calc_intent(msg_text)
+            if intent < 60:
+                continue
+            phones = PHONE_RE.findall(msg_text)
+            emails = EMAIL_RE.findall(msg_text)
             for ph in phones:
-                results.append({
-                    "phone": ph,
-                    "email": "",
-                    "source_name": "ВКонтакте",
-                    "source_url": post_url,
-                    "snippet": text[:200],
-                    "intent_score": intent,
-                })
+                if ph not in seen:
+                    seen.add(ph)
+                    results.append({
+                        "phone": ph,
+                        "email": "",
+                        "source_name": f"Telegram @{channel_username}",
+                        "source_url": f"https://t.me/{channel_username}",
+                        "snippet": msg_text[:200],
+                        "intent_score": intent,
+                    })
             for em in emails:
-                results.append({
-                    "phone": "",
-                    "email": em,
-                    "source_name": "ВКонтакте",
-                    "source_url": post_url,
-                    "snippet": text[:200],
-                    "intent_score": intent,
-                })
+                if em not in seen:
+                    seen.add(em)
+                    results.append({
+                        "phone": "",
+                        "email": em,
+                        "source_name": f"Telegram @{channel_username}",
+                        "source_url": f"https://t.me/{channel_username}",
+                        "snippet": msg_text[:200],
+                        "intent_score": intent,
+                    })
+            if not phones and not emails and intent >= 70:
+                key = msg_text[:50]
+                if key not in seen:
+                    seen.add(key)
+                    results.append({
+                        "phone": "",
+                        "email": "",
+                        "source_name": f"Telegram @{channel_username}",
+                        "source_url": f"https://t.me/{channel_username}",
+                        "snippet": msg_text[:200],
+                        "intent_score": intent,
+                    })
     except Exception:
         pass
+    return results
+
+def search_telegram_all():
+    """Парсит все известные Telegram-каналы про контрактную службу."""
+    results = []
+    for channel in TELEGRAM_CHANNELS:
+        results.extend(search_telegram_channel(channel))
     return results
 
 def run_monitoring(task_id, competitor_name, keywords, cur):
     """Запускает парсинг по всем источникам и сохраняет найденные лиды в БД."""
     all_results = []
-    all_results.extend(search_yandex(competitor_name, keywords))
-    all_results.extend(search_2gis(competitor_name))
-    all_results.extend(search_vk(keywords))
+    search_kw = keywords if keywords else competitor_name
+    all_results.extend(search_yandex(search_kw))
+    all_results.extend(search_vk(search_kw))
+    all_results.extend(search_telegram_all())
 
     for r in all_results:
         cur.execute(
             f"""
             INSERT INTO {SCHEMA}.monitor_leads
-                (task_id, phone, email, source, author_name, source_url, text, intent_score)
-            VALUES (%s, %s, %s, %s, %s, %s, %s, %s)
+                (task_id, phone, email, source_name, source_url, snippet, intent_score)
+            VALUES (%s, %s, %s, %s, %s, %s, %s)
             """,
             (
                 task_id,
-                r.get("phone"),
-                r.get("email"),
-                r.get("source_name") or r.get("source"),
-                r.get("author_name"),
-                r.get("source_url"),
-                r.get("snippet") or r.get("text"),
+                r.get("phone", ""),
+                r.get("email", ""),
+                r.get("source_name", ""),
+                r.get("source_url", ""),
+                r.get("snippet", ""),
                 r.get("intent_score", 50),
             ),
         )
@@ -223,7 +297,7 @@ def run_monitoring(task_id, competitor_name, keywords, cur):
     return len(all_results)
 
 def handler(event: dict, context) -> dict:
-    """Мониторит открытые источники: Яндекс, 2GIS, ВКонтакте — ищет контакты конкурентов."""
+    """Мониторит открытые источники: Яндекс, ВКонтакте, Telegram — ищет кандидатов на контрактную службу."""
     json_headers = dict(CORS_HEADERS)
     json_headers["Content-Type"] = "application/json"
 
@@ -240,7 +314,6 @@ def handler(event: dict, context) -> dict:
     ensure_tables(cur)
     conn.commit()
 
-    # GET / — список задач мониторинга
     if method == "GET" and not task_id:
         cur.execute(
             f"""
@@ -264,16 +337,15 @@ def handler(event: dict, context) -> dict:
             "body": json.dumps({"tasks": tasks}, ensure_ascii=False),
         }
 
-    # GET /?task_id=X — лиды задачи
     if method == "GET" and task_id:
         cur.execute(
             f"""
-            SELECT id, task_id, phone, email, source, author_name, source_url,
-                   text, intent_score,
+            SELECT id, task_id, phone, email, source_name, source_url,
+                   snippet, intent_score,
                    to_char(created_at, 'DD.MM.YYYY HH24:MI') as created_at
             FROM {SCHEMA}.monitor_leads
             WHERE task_id = %s
-            ORDER BY created_at DESC
+            ORDER BY intent_score DESC, created_at DESC
             """,
             (task_id,),
         )
@@ -287,7 +359,6 @@ def handler(event: dict, context) -> dict:
             "body": json.dumps({"leads": leads}, ensure_ascii=False),
         }
 
-    # POST /?action=create — создать задачу мониторинга
     if method == "POST" and action == "create":
         body = json.loads(event.get("body") or "{}")
         competitor_name = body.get("competitor_name", "").strip()
@@ -316,7 +387,6 @@ def handler(event: dict, context) -> dict:
             "body": json.dumps({"id": new_id, "success": True}, ensure_ascii=False),
         }
 
-    # POST /?action=run&task_id=X — запустить мониторинг
     if method == "POST" and action == "run" and task_id:
         cur.execute(
             f"SELECT id, competitor_name, keywords FROM {SCHEMA}.monitor_tasks WHERE id = %s",
@@ -345,7 +415,6 @@ def handler(event: dict, context) -> dict:
             "body": json.dumps({"success": True, "found": found}, ensure_ascii=False),
         }
 
-    # POST /?action=autorun — запустить все задачи сразу (для автозапуска по расписанию)
     if method == "POST" and action == "autorun":
         cur.execute(f"SELECT id, competitor_name, keywords FROM {SCHEMA}.monitor_tasks")
         all_tasks = cur.fetchall()
@@ -363,7 +432,6 @@ def handler(event: dict, context) -> dict:
             "body": json.dumps({"success": True, "tasks_run": len(all_tasks), "total_found": total_found}, ensure_ascii=False),
         }
 
-    # POST /?action=delete&task_id=X — удалить задачу
     if method == "POST" and action == "delete" and task_id:
         cur.execute(f"DELETE FROM {SCHEMA}.monitor_leads WHERE task_id = %s", (task_id,))
         cur.execute(f"DELETE FROM {SCHEMA}.monitor_tasks WHERE id = %s", (task_id,))

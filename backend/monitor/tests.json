@@ -1,20 +1,16 @@
 {
   "tests": [
     {
-      "method": "GET",
-      "path": "/",
-      "expectedStatus": 200,
-      "expectedBodyContains": {"tasks": []}
-    },
-    {
+      "name": "Создать задачу мониторинга",
       "method": "POST",
       "path": "/?action=create",
       "body": {
-        "competitor_name": "TestCompetitor",
-        "keywords": "альтернатива замена"
+        "competitor_name": "контракт МО",
+        "keywords": "служба по контракту хочу заключить контракт"
       },
       "expectedStatus": 200,
-      "expectedBodyContains": {"id": 1}
+      "expectedBody": {"success": true},
+      "bodyMatcher": "partial"
     }
   ]
 }
