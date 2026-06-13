@@ -320,7 +320,8 @@ def handler(event: dict, context) -> dict:
     method = event.get("httpMethod", "GET")
     params = event.get("queryStringParameters") or {}
     action = params.get("action", "")
-    task_id = params.get("task_id", "")
+    task_id_raw = params.get("task_id", "")
+    task_id = int(task_id_raw) if task_id_raw else None
 
     if method == "OPTIONS":
         return {"statusCode": 200, "headers": json_headers, "body": ""}
@@ -329,6 +330,7 @@ def handler(event: dict, context) -> dict:
     cur = conn.cursor()
     ensure_tables(cur)
     conn.commit()
+    print(f"[DEBUG] method={method} action={action} task_id={task_id}")
 
     if method == "GET" and not task_id:
         cur.execute(
