@@ -806,6 +806,15 @@ function HelpModule() {
           <div className="bg-muted/50 rounded p-3 text-xs">
             <span className="text-foreground font-medium">Оценка намерения (0–100):</span> чем выше цифра — тем горячее лид. 80+ означает, что человек прямо сейчас ищет замену конкуренту.
           </div>
+          <div className="bg-muted/50 rounded p-3 text-xs space-y-1">
+            <p className="text-foreground font-medium">Статусы задач:</p>
+            <div className="space-y-1 mt-1">
+              <div className="flex items-center gap-2"><span className="px-2 py-0.5 rounded bg-muted text-muted-foreground">Не запускалась</span><span>задача создана, но ещё ни разу не запускалась</span></div>
+              <div className="flex items-center gap-2"><span className="px-2 py-0.5 rounded bg-amber-500/15 text-amber-400">Ищем...</span><span>поиск идёт прямо сейчас</span></div>
+              <div className="flex items-center gap-2"><span className="px-2 py-0.5 rounded bg-green-500/15 text-green-400">N лидов</span><span>найдены результаты — нажмите на задачу чтобы посмотреть</span></div>
+              <div className="flex items-center gap-2"><span className="px-2 py-0.5 rounded bg-muted text-muted-foreground">Не найдено</span><span>запускалась, но упоминаний не нашлось — попробуйте изменить ключевые слова</span></div>
+            </div>
+          </div>
         </div>
       ),
     },
