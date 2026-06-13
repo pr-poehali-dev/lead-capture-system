@@ -210,7 +210,7 @@ def handler(event: dict, context) -> dict:
     # POST /?action=delete — удалить задачу и контакты
     if method == 'POST':
         body = json.loads(event.get('body') or '{}')
-        action = (event.get('queryStringParameters') or {}).get('action', '')
+        action = (event.get('queryStringParameters') or {}).get('action', '') or body.get('action', '')
         if action == 'delete':
             task_id = body.get('task_id')
             if not task_id:

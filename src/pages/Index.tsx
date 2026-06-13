@@ -597,7 +597,7 @@ function ParserModule() {
 
   const deleteTask = async (id: number) => {
     if (!confirm("Удалить задачу и все найденные контакты?")) return;
-    await fetch(`${PARSER_URL}?action=delete`, { method: "POST", headers: {"Content-Type":"application/json"}, body: JSON.stringify({ task_id: id }) });
+    await fetch(`${PARSER_URL}?action=delete`, { method: "POST", headers: {"Content-Type":"application/json"}, body: JSON.stringify({ task_id: id, action: "delete" }) });
     if (selectedId === id) { setSelectedId(null); setContacts([]); }
     fetchTasks();
   };
@@ -642,8 +642,8 @@ function ParserModule() {
           </div>
           {doneTasks.length===0
             ? <EmptyState icon="History" text="Нет задач" sub="Запустите парсинг" />
-            : <div className="space-y-1.5">
-                {doneTasks.slice(0,8).map(t => (
+            : <div className="space-y-1.5 max-h-64 overflow-y-auto pr-1">
+                {doneTasks.map(t => (
                   <div key={t.id} className={`flex items-center gap-1 rounded ${selectedId===t.id ? "bg-primary/10 border border-primary/30" : "bg-muted"}`}>
                     <button onClick={() => { setSelectedId(t.id); fetchContacts(t.id); }}
                       className="flex-1 flex items-center justify-between px-3 py-2 text-left transition-colors hover:opacity-80 min-w-0">
