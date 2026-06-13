@@ -41,7 +41,7 @@ function useCrmSend() {
 // ─── TYPES ────────────────────────────────────────────────────────────────────
 interface WidgetItem { id: number; name: string; site_url: string; competitors: string; token: string; created_at: string; }
 interface WidgetLead { id: number; widget_id: number; phone: string|null; email: string|null; name: string|null; referrer: string|null; competitor_source: string|null; utm_source: string|null; page_url: string|null; created_at: string; }
-interface MonitorTask { id: number; competitor_name: string; keywords: string; status: string; created_at: string; last_run: string|null; }
+interface MonitorTask { id: number; competitor_name: string; keywords: string; status: string; created_at: string; last_run: string|null; leads_count: number; }
 interface MonitorLead { id: number; source: string; author_name: string|null; phone: string|null; email: string|null; text: string|null; source_url: string|null; intent_score: number; created_at: string; }
 interface ParseTask { id: number; url: string; status: string; created_at: string; finished_at: string|null; contacts_count: number; }
 interface ParseContact { id: number; phone: string|null; email: string|null; name: string|null; social_vk: string|null; social_tg: string|null; raw_page_url: string; created_at: string; }
@@ -477,7 +477,14 @@ function MonitorModule() {
                 </div>
               </div>
               <div className="flex items-center gap-2 flex-shrink-0">
-                <Badge label={task.status==="done"?"Готово":"Ожидание"} type={task.status==="done"?"ok":"muted"} />
+                {running === task.id
+                  ? <span className="flex items-center gap-1 text-xs px-2 py-0.5 rounded bg-amber-500/15 text-amber-400"><Icon name="Loader2" size={11} className="animate-spin"/>Ищем...</span>
+                  : task.last_run
+                    ? task.leads_count > 0
+                      ? <span className="text-xs px-2 py-0.5 rounded bg-green-500/15 text-green-400">{task.leads_count} лид{task.leads_count===1?"":"ов"}</span>
+                      : <span className="text-xs px-2 py-0.5 rounded bg-muted text-muted-foreground">Не найдено</span>
+                    : <span className="text-xs px-2 py-0.5 rounded bg-muted text-muted-foreground">Не запускалась</span>
+                }
                 <button onClick={() => runTask(task.id)} disabled={running === task.id || running === -1}
                   className="flex items-center gap-1.5 text-xs px-3 py-1.5 bg-primary text-primary-foreground rounded hover:bg-primary/90 disabled:opacity-50 transition-colors">
                   {running===task.id ? <><Icon name="Loader2" size={12} className="animate-spin"/>Ищем...</> : <><Icon name="Play" size={12}/>Запустить</>}

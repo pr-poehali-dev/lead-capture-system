@@ -243,11 +243,14 @@ def handler(event: dict, context) -> dict:
     if method == "GET" and not task_id:
         cur.execute(
             f"""
-            SELECT id, competitor_name, keywords, status,
-                   to_char(created_at, 'DD.MM.YYYY HH24:MI') as created_at,
-                   to_char(last_run, 'DD.MM.YYYY HH24:MI') as last_run
-            FROM {SCHEMA}.monitor_tasks
-            ORDER BY created_at DESC
+            SELECT mt.id, mt.competitor_name, mt.keywords, mt.status,
+                   to_char(mt.created_at, 'DD.MM.YYYY HH24:MI') as created_at,
+                   to_char(mt.last_run, 'DD.MM.YYYY HH24:MI') as last_run,
+                   COUNT(ml.id) as leads_count
+            FROM {SCHEMA}.monitor_tasks mt
+            LEFT JOIN {SCHEMA}.monitor_leads ml ON ml.task_id = mt.id
+            GROUP BY mt.id
+            ORDER BY mt.created_at DESC
             """
         )
         rows = cur.fetchall()
