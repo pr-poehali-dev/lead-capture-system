@@ -368,7 +368,19 @@ function MonitorModule() {
   const [selected, setSelected] = useState<MonitorTask | null>(null);
   const [showCreate, setShowCreate] = useState(false);
   const [running, setRunning] = useState<number|null>(null);
+  const [excluded, setExcluded] = useState<Set<number>>(new Set());
+  const [sendingAll, setSendingAll] = useState(false);
   const { sending: crmSending, sent: crmSent, send: sendCrm } = useCrmSend();
+
+  const toggleExclude = (id: number) => setExcluded(prev => { const s = new Set(prev); if (s.has(id)) { s.delete(id); } else { s.add(id); } return s; });
+
+  const sendAllToCrm = async () => {
+    const toSend = leads.filter(l => !excluded.has(l.id) && !crmSent.has(l.id));
+    if (toSend.length === 0) return;
+    setSendingAll(true);
+    for (const l of toSend) await sendCrm(l.id, l.phone, l.author_name, `Источник: ${l.source}. ${l.text||""}`);
+    setSendingAll(false);
+  };
 
   const fetchTasks = useCallback(async () => {
     const r = await fetch(MONITOR_URL); const d = await r.json(); setTasks(d.tasks||[]);
@@ -467,7 +479,7 @@ function MonitorModule() {
         {tasks.map(task => (
           <div key={task.id} className={`bg-card card-glow rounded-lg overflow-hidden border transition-colors ${selected?.id === task.id ? "border-primary/40" : "border-transparent"}`}>
             <div className="p-4 flex items-center justify-between gap-4">
-              <div className="flex items-center gap-3 min-w-0 cursor-pointer flex-1" onClick={() => { setSelected(task); fetchLeads(task.id); }}>
+              <div className="flex items-center gap-3 min-w-0 cursor-pointer flex-1" onClick={() => { setSelected(task); fetchLeads(task.id); setExcluded(new Set()); }}>
                 <div className="w-8 h-8 rounded bg-amber-500/10 flex items-center justify-center flex-shrink-0">
                   <Icon name="Radio" size={15} className="text-amber-400" />
                 </div>
@@ -502,21 +514,35 @@ function MonitorModule() {
                   ? <EmptyState icon="SearchX" text="Упоминаний не найдено" sub='Нажмите "Запустить" для поиска' />
                   : (
                     <div className="p-4">
-                      <div className="flex items-center justify-between mb-3">
-                        <span className="text-xs text-muted-foreground">Найдено {leads.length} упоминаний</span>
-                        <button onClick={() => exportCsv([["Источник","Автор","Телефон","Email","Оценка","Текст","URL","Дата"],...leads.map(l=>[l.source||"",l.author_name||"",l.phone||"",l.email||"",String(l.intent_score),l.text||"",l.source_url||"",l.created_at])],"monitor_leads.csv")}
-                          className="flex items-center gap-1.5 text-xs px-3 py-1.5 bg-muted text-muted-foreground hover:text-foreground rounded transition-colors">
-                          <Icon name="Download" size={12} /> CSV
-                        </button>
+                      <div className="flex items-center justify-between mb-3 gap-2 flex-wrap">
+                        <span className="text-xs text-muted-foreground">
+                          Найдено {leads.length} упоминаний
+                          {excluded.size > 0 && <span className="ml-1 text-muted-foreground/60">· {excluded.size} исключено</span>}
+                        </span>
+                        <div className="flex items-center gap-2">
+                          <button onClick={sendAllToCrm} disabled={sendingAll || leads.filter(l => !excluded.has(l.id) && !crmSent.has(l.id)).length === 0}
+                            className="flex items-center gap-1.5 text-xs px-3 py-1.5 bg-primary text-primary-foreground rounded hover:bg-primary/90 transition-colors disabled:opacity-40">
+                            {sendingAll ? <><Icon name="Loader2" size={12} className="animate-spin"/>Отправляем...</> : <><Icon name="SendHorizonal" size={12}/>Отправить все в CRM</>}
+                          </button>
+                          <button onClick={() => exportCsv([["Источник","Автор","Телефон","Email","Оценка","Текст","URL","Дата"],...leads.map(l=>[l.source||"",l.author_name||"",l.phone||"",l.email||"",String(l.intent_score),l.text||"",l.source_url||"",l.created_at])],"monitor_leads.csv")}
+                            className="flex items-center gap-1.5 text-xs px-3 py-1.5 bg-muted text-muted-foreground hover:text-foreground rounded transition-colors">
+                            <Icon name="Download" size={12} /> CSV
+                          </button>
+                        </div>
                       </div>
                       <table className="w-full">
                         <thead><tr className="border-b border-border">
+                          <th className="px-3 py-2 w-8"></th>
                           {["Источник","Автор","Телефон","Email","Намерение","Текст","CRM"].map(h => (
                             <th key={h} className="text-left text-xs text-muted-foreground uppercase tracking-widest px-3 py-2 font-medium">{h}</th>
                           ))}
                         </tr></thead>
                         <tbody>{leads.map(l => (
-                          <tr key={l.id} className="border-b border-border/50 hover:bg-muted/20 transition-colors">
+                          <tr key={l.id} className={`border-b border-border/50 transition-colors ${excluded.has(l.id) ? "opacity-40" : "hover:bg-muted/20"}`}>
+                            <td className="px-3 py-2.5">
+                              <input type="checkbox" checked={!excluded.has(l.id)} onChange={() => toggleExclude(l.id)}
+                                className="w-3.5 h-3.5 accent-primary cursor-pointer" title={excluded.has(l.id) ? "Включить" : "Исключить из отправки"} />
+                            </td>
                             <td className="px-3 py-2.5"><span className="text-xs bg-muted px-2 py-0.5 rounded text-muted-foreground">{l.source}</span></td>
                             <td className="px-3 py-2.5 text-sm text-foreground">{l.author_name||"—"}</td>
                             <td className="px-3 py-2.5 font-mono text-sm text-emerald-400">{l.phone||"—"}</td>
@@ -527,7 +553,7 @@ function MonitorModule() {
                               {crmSent.has(l.id)
                                 ? <span className="text-xs text-emerald-400 flex items-center gap-1"><Icon name="Check" size={12}/>Добавлен</span>
                                 : <button onClick={() => sendCrm(l.id, l.phone, l.author_name, `Источник: ${l.source}. ${l.text||""}`)}
-                                    disabled={crmSending === l.id}
+                                    disabled={crmSending === l.id || excluded.has(l.id)}
                                     className="flex items-center gap-1 text-xs px-2 py-1 bg-primary/10 text-primary rounded hover:bg-primary/20 transition-colors disabled:opacity-50">
                                     {crmSending === l.id ? <Icon name="Loader2" size={11} className="animate-spin"/> : <Icon name="Send" size={11}/>}
                                     В CRM
