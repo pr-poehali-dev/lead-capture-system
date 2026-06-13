@@ -5,6 +5,7 @@ import re
 import urllib.request
 import urllib.parse
 import psycopg2
+from concurrent.futures import ThreadPoolExecutor, as_completed, TimeoutError
 
 SCHEMA = "t_p56466268_lead_capture_system"
 
@@ -35,9 +36,10 @@ TELEGRAM_CHANNELS = [
     "svo_kontract",
     "vmf_kontract",
     "contract_army_ru",
-    "kontrakт_info",
     "army_russia_kontract",
 ]
+
+HTTP_TIMEOUT = 5
 
 def get_conn():
     return psycopg2.connect(os.environ["DATABASE_URL"])
@@ -83,7 +85,7 @@ def calc_intent(text):
         score = 70
     return score
 
-def http_get(url, timeout=10):
+def http_get(url, timeout=HTTP_TIMEOUT):
     req = urllib.request.Request(
         url,
         headers={"User-Agent": "Mozilla/5.0 (Windows NT 10.0; Win64; x64) AppleWebKit/537.36"},
@@ -97,7 +99,6 @@ def search_yandex(keywords):
     queries = [
         f"{keywords} служба по контракту телефон",
         f"хочу заключить контракт {keywords}",
-        f"интересует контракт МО {keywords}",
     ]
     seen = set()
     for q in queries:
@@ -141,7 +142,6 @@ def search_vk(keywords):
     results = []
     vk_queries = [
         f"служба по контракту {keywords}",
-        f"хочу по контракту {keywords}",
         f"контракт МО {keywords}",
     ]
     seen = set()
@@ -254,10 +254,15 @@ def search_telegram_channel(channel_username):
     return results
 
 def search_telegram_all():
-    """Парсит все известные Telegram-каналы про контрактную службу."""
+    """Парсит все известные Telegram-каналы про контрактную службу параллельно."""
     results = []
-    for channel in TELEGRAM_CHANNELS:
-        results.extend(search_telegram_channel(channel))
+    with ThreadPoolExecutor(max_workers=5) as executor:
+        futures = {executor.submit(search_telegram_channel, ch): ch for ch in TELEGRAM_CHANNELS}
+        for future in as_completed(futures, timeout=15):
+            try:
+                results.extend(future.result(timeout=6))
+            except Exception:
+                pass
     return results
 
 def run_monitoring(task_id, competitor_name, keywords, cur):
