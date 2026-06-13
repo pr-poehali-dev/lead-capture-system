@@ -244,24 +244,29 @@ def search_telegram_all():
 
 def save_results(task_id, results, cur):
     """Сохраняет найденные лиды в БД."""
+    saved = 0
     for r in results:
-        cur.execute(
-            f"""
-            INSERT INTO {SCHEMA}.monitor_leads
-                (task_id, phone, email, source_name, source_url, snippet, intent_score)
-            VALUES (%s, %s, %s, %s, %s, %s, %s)
-            """,
-            (
-                task_id,
-                r.get("phone", ""),
-                r.get("email", ""),
-                r.get("source_name", ""),
-                r.get("source_url", ""),
-                r.get("snippet", ""),
-                r.get("intent_score", 50),
-            ),
-        )
-    return len(results)
+        try:
+            cur.execute(
+                f"""
+                INSERT INTO {SCHEMA}.monitor_leads
+                    (task_id, phone, email, source_name, source_url, snippet, intent_score)
+                VALUES (%s, %s, %s, %s, %s, %s, %s)
+                """,
+                (
+                    task_id,
+                    str(r.get("phone", ""))[:100],
+                    str(r.get("email", ""))[:200],
+                    str(r.get("source_name", ""))[:200],
+                    str(r.get("source_url", ""))[:500],
+                    str(r.get("snippet", ""))[:1000],
+                    int(r.get("intent_score", 50)),
+                ),
+            )
+            saved += 1
+        except Exception:
+            cur.connection.rollback()
+    return saved
 
 def run_source(task_id, source, competitor_name, keywords, cur):
     """Запускает один источник и сохраняет результаты."""
