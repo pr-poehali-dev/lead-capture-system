@@ -401,26 +401,26 @@ def search_avito(keywords):
             pass
     return results
 
+def esc(val):
+    return str(val).replace("'", "''")
+
 def save_results(task_id, results, cur):
     """Сохраняет найденные лиды в БД."""
     saved = 0
     for r in results:
         try:
+            phone = esc(str(r.get("phone", ""))[:100])
+            email = esc(str(r.get("email", ""))[:200])
+            source_name = esc(str(r.get("source_name", ""))[:200])
+            source_url = esc(str(r.get("source_url", ""))[:500])
+            snippet = esc(str(r.get("snippet", ""))[:1000])
+            intent_score = int(r.get("intent_score", 50))
             cur.execute(
                 f"""
                 INSERT INTO {SCHEMA}.monitor_leads
                     (task_id, phone, email, source_name, source_url, snippet, intent_score)
-                VALUES (%s, %s, %s, %s, %s, %s, %s)
-                """,
-                (
-                    task_id,
-                    str(r.get("phone", ""))[:100],
-                    str(r.get("email", ""))[:200],
-                    str(r.get("source_name", ""))[:200],
-                    str(r.get("source_url", ""))[:500],
-                    str(r.get("snippet", ""))[:1000],
-                    int(r.get("intent_score", 50)),
-                ),
+                VALUES ({int(task_id)}, '{phone}', '{email}', '{source_name}', '{source_url}', '{snippet}', {intent_score})
+                """
             )
             saved += 1
         except Exception:
@@ -446,8 +446,7 @@ def run_source(task_id, source, competitor_name, keywords, cur):
     print(f"[DEBUG] source={source} found={len(results)}")
     saved = save_results(task_id, results, cur)
     cur.execute(
-        f"UPDATE {SCHEMA}.monitor_tasks SET last_run = NOW(), status = 'running' WHERE id = %s",
-        (task_id,),
+        f"UPDATE {SCHEMA}.monitor_tasks SET last_run = NOW(), status = 'running' WHERE id = {int(task_id)}"
     )
     return saved
 
@@ -501,10 +500,9 @@ def handler(event: dict, context) -> dict:
                    snippet, intent_score,
                    to_char(created_at, 'DD.MM.YYYY HH24:MI') as created_at
             FROM {SCHEMA}.monitor_leads
-            WHERE task_id = %s
+            WHERE task_id = {int(task_id)}
             ORDER BY intent_score DESC, created_at DESC
-            """,
-            (task_id,),
+            """
         )
         rows = cur.fetchall()
         cols = [d[0] for d in cur.description]
@@ -530,10 +528,9 @@ def handler(event: dict, context) -> dict:
         cur.execute(
             f"""
             INSERT INTO {SCHEMA}.monitor_tasks (competitor_name, keywords)
-            VALUES (%s, %s)
+            VALUES ($${competitor_name}$$, $${keywords}$$)
             RETURNING id
-            """,
-            (competitor_name, keywords),
+            """
         )
         new_id = cur.fetchone()[0]
         conn.commit()
@@ -546,8 +543,7 @@ def handler(event: dict, context) -> dict:
 
     if method == "POST" and action == "run" and task_id:
         cur.execute(
-            f"SELECT id, competitor_name, keywords FROM {SCHEMA}.monitor_tasks WHERE id = %s",
-            (task_id,),
+            f"SELECT id, competitor_name, keywords FROM {SCHEMA}.monitor_tasks WHERE id = {int(task_id)}"
         )
         row = cur.fetchone()
         if not row:
@@ -559,8 +555,7 @@ def handler(event: dict, context) -> dict:
             }
         t_id, competitor_name, keywords = row
         cur.execute(
-            f"UPDATE {SCHEMA}.monitor_tasks SET status = 'running' WHERE id = %s",
-            (t_id,),
+            f"UPDATE {SCHEMA}.monitor_tasks SET status = 'running' WHERE id = {int(t_id)}"
         )
         conn.commit()
         conn.close()
@@ -573,8 +568,7 @@ def handler(event: dict, context) -> dict:
     if method == "POST" and action == "run_source" and task_id:
         source = params.get("source", "")
         cur.execute(
-            f"SELECT id, competitor_name, keywords FROM {SCHEMA}.monitor_tasks WHERE id = %s",
-            (task_id,),
+            f"SELECT id, competitor_name, keywords FROM {SCHEMA}.monitor_tasks WHERE id = {int(task_id)}"
         )
         row = cur.fetchone()
         if not row:
@@ -584,8 +578,7 @@ def handler(event: dict, context) -> dict:
         found = run_source(t_id, source, competitor_name, keywords, cur)
         if source == "telegram":
             cur.execute(
-                f"UPDATE {SCHEMA}.monitor_tasks SET status = 'done', last_run = NOW() WHERE id = %s",
-                (t_id,),
+                f"UPDATE {SCHEMA}.monitor_tasks SET status = 'done', last_run = NOW() WHERE id = {int(t_id)}"
             )
         conn.commit()
         conn.close()
@@ -600,13 +593,13 @@ def handler(event: dict, context) -> dict:
         all_tasks = cur.fetchall()
         total_found = 0
         for t_id, competitor_name, keywords in all_tasks:
-            cur.execute(f"UPDATE {SCHEMA}.monitor_tasks SET status = 'running' WHERE id = %s", (t_id,))
+            cur.execute(f"UPDATE {SCHEMA}.monitor_tasks SET status = 'running' WHERE id = {int(t_id)}")
             conn.commit()
             for source in ["yandex", "vk", "vk_token", "vk_groups", "avito"]:
                 found = run_source(t_id, source, competitor_name, keywords, cur)
                 total_found += found
                 conn.commit()
-            cur.execute(f"UPDATE {SCHEMA}.monitor_tasks SET status = 'done', last_run = NOW() WHERE id = %s", (t_id,))
+            cur.execute(f"UPDATE {SCHEMA}.monitor_tasks SET status = 'done', last_run = NOW() WHERE id = {int(t_id)}")
             conn.commit()
         conn.close()
         return {
@@ -616,8 +609,8 @@ def handler(event: dict, context) -> dict:
         }
 
     if method == "POST" and action == "delete" and task_id:
-        cur.execute(f"DELETE FROM {SCHEMA}.monitor_leads WHERE task_id = %s", (task_id,))
-        cur.execute(f"DELETE FROM {SCHEMA}.monitor_tasks WHERE id = %s", (task_id,))
+        cur.execute(f"DELETE FROM {SCHEMA}.monitor_leads WHERE task_id = {int(task_id)}")
+        cur.execute(f"DELETE FROM {SCHEMA}.monitor_tasks WHERE id = {int(task_id)}")
         conn.commit()
         conn.close()
         return {"statusCode": 200, "headers": json_headers, "body": json.dumps({"success": True})}
