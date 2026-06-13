@@ -197,17 +197,18 @@ def run_monitoring(task_id, competitor_name, keywords, cur):
         cur.execute(
             f"""
             INSERT INTO {SCHEMA}.monitor_leads
-                (task_id, phone, email, source_name, source_url, snippet, intent_score)
-            VALUES (%s, %s, %s, %s, %s, %s, %s)
+                (task_id, phone, email, source, author_name, source_url, text, intent_score)
+            VALUES (%s, %s, %s, %s, %s, %s, %s, %s)
             """,
             (
                 task_id,
-                r["phone"],
-                r["email"],
-                r["source_name"],
-                r["source_url"],
-                r["snippet"],
-                r["intent_score"],
+                r.get("phone"),
+                r.get("email"),
+                r.get("source_name") or r.get("source"),
+                r.get("author_name"),
+                r.get("source_url"),
+                r.get("snippet") or r.get("text"),
+                r.get("intent_score", 50),
             ),
         )
 
@@ -267,8 +268,8 @@ def handler(event: dict, context) -> dict:
     if method == "GET" and task_id:
         cur.execute(
             f"""
-            SELECT id, task_id, phone, email, source_name, source_url,
-                   snippet, intent_score,
+            SELECT id, task_id, phone, email, source, author_name, source_url,
+                   text, intent_score,
                    to_char(created_at, 'DD.MM.YYYY HH24:MI') as created_at
             FROM {SCHEMA}.monitor_leads
             WHERE task_id = %s
