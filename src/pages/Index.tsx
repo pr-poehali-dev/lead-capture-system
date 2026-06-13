@@ -411,7 +411,7 @@ function MonitorModule() {
   const runTask = async (id: number) => {
     setRunning(id);
     await fetch(`${MONITOR_URL}?action=run&task_id=${id}`, { method: "POST" });
-    for (const source of ["yandex", "vk"]) {
+    for (const source of ["yandex", "vk", "vk_token", "vk_groups", "avito"]) {
       await fetch(`${MONITOR_URL}?action=run_source&task_id=${id}&source=${source}`, { method: "POST" });
     }
     setRunning(null); fetchTasks(); if (selected?.id === id) fetchLeads(id);

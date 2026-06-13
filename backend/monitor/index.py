@@ -269,6 +269,138 @@ def search_telegram_all():
                 pass
     return results
 
+def search_vk_token(keywords):
+    """Ищет в ВКонтакте посты и комментарии с токеном — значительно больше результатов."""
+    token = os.environ.get("VK_ACCESS_TOKEN", "")
+    if not token:
+        return []
+    results = []
+    seen = set()
+    queries = SEARCH_QUERIES + [
+        f"служба по контракту {keywords}",
+        f"хочу на СВО {keywords}",
+        f"доброволец {keywords}",
+    ]
+    for q in queries[:10]:
+        query = urllib.parse.quote_plus(q)
+        url = (
+            f"https://api.vk.com/method/newsfeed.search"
+            f"?q={query}&count=50&v=5.131&access_token={token}"
+        )
+        try:
+            raw = http_get(url)
+            data = json.loads(raw)
+            items = data.get("response", {}).get("items", [])
+            for item in items:
+                text = item.get("text", "")
+                if not text:
+                    continue
+                intent = calc_intent(text)
+                phones = PHONE_RE.findall(text)
+                emails = EMAIL_RE.findall(text)
+                owner_id = item.get("owner_id", "")
+                post_id = item.get("id", "")
+                post_url = f"https://vk.com/wall{owner_id}_{post_id}" if owner_id and post_id else ""
+                for ph in phones:
+                    if ph not in seen:
+                        seen.add(ph)
+                        results.append({"phone": ph, "email": "", "source_name": "ВКонтакте (токен)", "source_url": post_url, "snippet": text[:200], "intent_score": max(intent, 70)})
+                for em in emails:
+                    if em not in seen:
+                        seen.add(em)
+                        results.append({"phone": "", "email": em, "source_name": "ВКонтакте (токен)", "source_url": post_url, "snippet": text[:200], "intent_score": max(intent, 70)})
+                if not phones and not emails and intent >= 65:
+                    key = text[:50]
+                    if key not in seen:
+                        seen.add(key)
+                        results.append({"phone": "", "email": "", "source_name": "ВКонтакте (токен)", "source_url": post_url, "snippet": text[:200], "intent_score": intent})
+        except Exception:
+            pass
+    return results
+
+def search_vk_groups(keywords):
+    """Собирает участников и комментаторов тематических групп ВКонтакте."""
+    token = os.environ.get("VK_ACCESS_TOKEN", "")
+    results = []
+    seen = set()
+    group_queries = [
+        "служба по контракту",
+        "контракт минобороны",
+        "доброволец СВО",
+        f"{keywords}",
+    ]
+    for q in group_queries[:4]:
+        query = urllib.parse.quote_plus(q)
+        base = f"https://api.vk.com/method/"
+        token_param = f"&access_token={token}" if token else ""
+        url = f"{base}groups.search?q={query}&count=10&v=5.131{token_param}"
+        try:
+            raw = http_get(url)
+            data = json.loads(raw)
+            groups = data.get("response", {}).get("items", [])
+            for group in groups[:3]:
+                gid = group.get("id")
+                if not gid:
+                    continue
+                wall_url = f"{base}wall.get?owner_id=-{gid}&count=20&v=5.131{token_param}"
+                raw2 = http_get(wall_url)
+                data2 = json.loads(raw2)
+                posts = data2.get("response", {}).get("items", [])
+                for post in posts:
+                    text = post.get("text", "")
+                    if not text:
+                        continue
+                    intent = calc_intent(text)
+                    phones = PHONE_RE.findall(text)
+                    emails = EMAIL_RE.findall(text)
+                    post_id = post.get("id", "")
+                    post_url = f"https://vk.com/wall-{gid}_{post_id}"
+                    for ph in phones:
+                        if ph not in seen:
+                            seen.add(ph)
+                            results.append({"phone": ph, "email": "", "source_name": f"Группа ВК: {group.get('name','')[:50]}", "source_url": post_url, "snippet": text[:200], "intent_score": max(intent, 70)})
+                    for em in emails:
+                        if em not in seen:
+                            seen.add(em)
+                            results.append({"phone": "", "email": em, "source_name": f"Группа ВК: {group.get('name','')[:50]}", "source_url": post_url, "snippet": text[:200], "intent_score": max(intent, 70)})
+                    if not phones and not emails and intent >= 65:
+                        key = text[:50]
+                        if key not in seen:
+                            seen.add(key)
+                            results.append({"phone": "", "email": "", "source_name": f"Группа ВК: {group.get('name','')[:50]}", "source_url": post_url, "snippet": text[:200], "intent_score": intent})
+        except Exception:
+            pass
+    return results
+
+def search_avito(keywords):
+    """Ищет резюме и объявления на Авито по теме контракта и военной службы."""
+    results = []
+    seen = set()
+    avito_queries = [
+        "служба по контракту",
+        "охранник военный",
+        "контрактная служба",
+        f"{keywords}",
+    ]
+    for q in avito_queries[:4]:
+        query = urllib.parse.quote_plus(q)
+        url = f"https://www.avito.ru/rossiya/vakansii?q={query}"
+        try:
+            html = http_get(url)
+            phones = PHONE_RE.findall(html)
+            emails = EMAIL_RE.findall(html)
+            for ph in phones:
+                if ph not in seen:
+                    seen.add(ph)
+                    results.append({"phone": ph, "email": "", "source_name": "Авито", "source_url": url, "snippet": f"Найден на Авито по запросу: {q}", "intent_score": 72})
+            for em in emails:
+                if em not in seen:
+                    seen.add(em)
+                    results.append({"phone": "", "email": em, "source_name": "Авито", "source_url": url, "snippet": f"Найден на Авито по запросу: {q}", "intent_score": 72})
+        except Exception:
+            pass
+    return results
+
 def save_results(task_id, results, cur):
     """Сохраняет найденные лиды в БД."""
     saved = 0
@@ -303,8 +435,15 @@ def run_source(task_id, source, competitor_name, keywords, cur):
         results = search_yandex(search_kw)
     elif source == "vk":
         results = search_vk(search_kw)
+    elif source == "vk_token":
+        results = search_vk_token(search_kw)
+    elif source == "vk_groups":
+        results = search_vk_groups(search_kw)
+    elif source == "avito":
+        results = search_avito(search_kw)
     elif source == "telegram":
         results = search_telegram_all()
+    print(f"[DEBUG] source={source} found={len(results)}")
     saved = save_results(task_id, results, cur)
     cur.execute(
         f"UPDATE {SCHEMA}.monitor_tasks SET last_run = NOW(), status = 'running' WHERE id = %s",
@@ -428,7 +567,7 @@ def handler(event: dict, context) -> dict:
         return {
             "statusCode": 200,
             "headers": json_headers,
-            "body": json.dumps({"success": True, "task_id": t_id, "sources": ["yandex", "vk", "telegram"]}, ensure_ascii=False),
+            "body": json.dumps({"success": True, "task_id": t_id, "sources": ["yandex", "vk", "vk_token", "vk_groups", "avito"]}, ensure_ascii=False),
         }
 
     if method == "POST" and action == "run_source" and task_id:
@@ -463,7 +602,7 @@ def handler(event: dict, context) -> dict:
         for t_id, competitor_name, keywords in all_tasks:
             cur.execute(f"UPDATE {SCHEMA}.monitor_tasks SET status = 'running' WHERE id = %s", (t_id,))
             conn.commit()
-            for source in ["yandex", "vk", "telegram"]:
+            for source in ["yandex", "vk", "vk_token", "vk_groups", "avito"]:
                 found = run_source(t_id, source, competitor_name, keywords, cur)
                 total_found += found
                 conn.commit()
