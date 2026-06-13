@@ -265,15 +265,9 @@ def search_telegram_all():
                 pass
     return results
 
-def run_monitoring(task_id, competitor_name, keywords, cur):
-    """Запускает парсинг по всем источникам и сохраняет найденные лиды в БД."""
-    all_results = []
-    search_kw = keywords if keywords else competitor_name
-    all_results.extend(search_yandex(search_kw))
-    all_results.extend(search_vk(search_kw))
-    all_results.extend(search_telegram_all())
-
-    for r in all_results:
+def save_results(task_id, results, cur):
+    """Сохраняет найденные лиды в БД."""
+    for r in results:
         cur.execute(
             f"""
             INSERT INTO {SCHEMA}.monitor_leads
@@ -290,16 +284,24 @@ def run_monitoring(task_id, competitor_name, keywords, cur):
                 r.get("intent_score", 50),
             ),
         )
+    return len(results)
 
+def run_source(task_id, source, competitor_name, keywords, cur):
+    """Запускает один источник и сохраняет результаты."""
+    search_kw = keywords if keywords else competitor_name
+    results = []
+    if source == "yandex":
+        results = search_yandex(search_kw)
+    elif source == "vk":
+        results = search_vk(search_kw)
+    elif source == "telegram":
+        results = search_telegram_all()
+    saved = save_results(task_id, results, cur)
     cur.execute(
-        f"""
-        UPDATE {SCHEMA}.monitor_tasks
-        SET last_run = NOW(), status = 'done'
-        WHERE id = %s
-        """,
+        f"UPDATE {SCHEMA}.monitor_tasks SET last_run = NOW(), status = 'running' WHERE id = %s",
         (task_id,),
     )
-    return len(all_results)
+    return saved
 
 def handler(event: dict, context) -> dict:
     """Мониторит открытые источники: Яндекс, ВКонтакте, Telegram — ищет кандидатов на контрактную службу."""
@@ -411,13 +413,36 @@ def handler(event: dict, context) -> dict:
             (t_id,),
         )
         conn.commit()
-        found = run_monitoring(t_id, competitor_name, keywords, cur)
+        conn.close()
+        return {
+            "statusCode": 200,
+            "headers": json_headers,
+            "body": json.dumps({"success": True, "task_id": t_id, "sources": ["yandex", "vk", "telegram"]}, ensure_ascii=False),
+        }
+
+    if method == "POST" and action == "run_source" and task_id:
+        source = params.get("source", "")
+        cur.execute(
+            f"SELECT id, competitor_name, keywords FROM {SCHEMA}.monitor_tasks WHERE id = %s",
+            (task_id,),
+        )
+        row = cur.fetchone()
+        if not row:
+            conn.close()
+            return {"statusCode": 404, "headers": json_headers, "body": json.dumps({"error": "Task not found"})}
+        t_id, competitor_name, keywords = row
+        found = run_source(t_id, source, competitor_name, keywords, cur)
+        if source == "telegram":
+            cur.execute(
+                f"UPDATE {SCHEMA}.monitor_tasks SET status = 'done', last_run = NOW() WHERE id = %s",
+                (t_id,),
+            )
         conn.commit()
         conn.close()
         return {
             "statusCode": 200,
             "headers": json_headers,
-            "body": json.dumps({"success": True, "found": found}, ensure_ascii=False),
+            "body": json.dumps({"success": True, "source": source, "found": found}, ensure_ascii=False),
         }
 
     if method == "POST" and action == "autorun":
@@ -427,9 +452,12 @@ def handler(event: dict, context) -> dict:
         for t_id, competitor_name, keywords in all_tasks:
             cur.execute(f"UPDATE {SCHEMA}.monitor_tasks SET status = 'running' WHERE id = %s", (t_id,))
             conn.commit()
-            found = run_monitoring(t_id, competitor_name, keywords, cur)
+            for source in ["yandex", "vk", "telegram"]:
+                found = run_source(t_id, source, competitor_name, keywords, cur)
+                total_found += found
+                conn.commit()
+            cur.execute(f"UPDATE {SCHEMA}.monitor_tasks SET status = 'done', last_run = NOW() WHERE id = %s", (t_id,))
             conn.commit()
-            total_found += found
         conn.close()
         return {
             "statusCode": 200,
