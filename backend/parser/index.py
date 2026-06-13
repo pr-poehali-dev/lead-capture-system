@@ -185,12 +185,12 @@ def handler(event: dict, context) -> dict:
         cur = conn.cursor()
         if task_id:
             cur.execute(
-                f"SELECT id, url, status, to_char(created_at,'DD.MM.YYYY HH24:MI') as created_at, to_char(finished_at,'DD.MM.YYYY HH24:MI') as finished_at FROM {SCHEMA}.parse_tasks WHERE id = %s",
+                f"SELECT pt.id, pt.url, pt.status, to_char(pt.created_at,'DD.MM.YYYY HH24:MI') as created_at, to_char(pt.finished_at,'DD.MM.YYYY HH24:MI') as finished_at, COUNT(c.id) as contacts_count FROM {SCHEMA}.parse_tasks pt LEFT JOIN {SCHEMA}.contacts c ON c.task_id = pt.id WHERE pt.id = %s GROUP BY pt.id",
                 (task_id,)
             )
         else:
             cur.execute(
-                f"SELECT id, url, status, to_char(created_at,'DD.MM.YYYY HH24:MI') as created_at, to_char(finished_at,'DD.MM.YYYY HH24:MI') as finished_at FROM {SCHEMA}.parse_tasks ORDER BY created_at DESC LIMIT 50"
+                f"SELECT pt.id, pt.url, pt.status, to_char(pt.created_at,'DD.MM.YYYY HH24:MI') as created_at, to_char(pt.finished_at,'DD.MM.YYYY HH24:MI') as finished_at, COUNT(c.id) as contacts_count FROM {SCHEMA}.parse_tasks pt LEFT JOIN {SCHEMA}.contacts c ON c.task_id = pt.id GROUP BY pt.id ORDER BY pt.created_at DESC LIMIT 50"
             )
         cols = [d[0] for d in cur.description]
         tasks = [dict(zip(cols, r)) for r in cur.fetchall()]

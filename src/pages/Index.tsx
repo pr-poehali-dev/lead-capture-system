@@ -43,7 +43,7 @@ interface WidgetItem { id: number; name: string; site_url: string; competitors: 
 interface WidgetLead { id: number; widget_id: number; phone: string|null; email: string|null; name: string|null; referrer: string|null; competitor_source: string|null; utm_source: string|null; page_url: string|null; created_at: string; }
 interface MonitorTask { id: number; competitor_name: string; keywords: string; status: string; created_at: string; last_run: string|null; }
 interface MonitorLead { id: number; source: string; author_name: string|null; phone: string|null; email: string|null; text: string|null; source_url: string|null; intent_score: number; created_at: string; }
-interface ParseTask { id: number; url: string; status: string; created_at: string; finished_at: string|null; }
+interface ParseTask { id: number; url: string; status: string; created_at: string; finished_at: string|null; contacts_count: number; }
 interface ParseContact { id: number; phone: string|null; email: string|null; name: string|null; social_vk: string|null; social_tg: string|null; raw_page_url: string; created_at: string; }
 
 const NAV = [
@@ -647,10 +647,12 @@ function ParserModule() {
                   <div key={t.id} className={`flex items-center gap-1 rounded ${selectedId===t.id ? "bg-primary/10 border border-primary/30" : "bg-muted"}`}>
                     <button onClick={() => { setSelectedId(t.id); fetchContacts(t.id); }}
                       className="flex-1 flex items-center justify-between px-3 py-2 text-left transition-colors hover:opacity-80 min-w-0">
-                      <span className="text-xs text-foreground truncate max-w-[160px]">
+                      <span className="text-xs text-foreground truncate max-w-[130px]">
                         {(() => { try { return new URL(t.url.startsWith("http")?t.url:"https://"+t.url).hostname; } catch { return t.url; } })()}
                       </span>
-                      <span className="text-xs font-mono text-muted-foreground flex-shrink-0 ml-2">{t.finished_at||t.created_at}</span>
+                      <span className={`text-xs font-medium flex-shrink-0 ml-2 px-1.5 py-0.5 rounded ${t.contacts_count > 0 ? "bg-green-500/15 text-green-400" : "bg-muted-foreground/15 text-muted-foreground"}`}>
+                        {t.contacts_count} лид{t.contacts_count===1?"":"ов"}
+                      </span>
                     </button>
                     <button onClick={e => { e.stopPropagation(); deleteTask(t.id); }}
                       className="w-7 h-7 flex items-center justify-center rounded text-muted-foreground hover:text-destructive hover:bg-destructive/10 transition-colors flex-shrink-0 mr-1">
