@@ -378,7 +378,10 @@ function MonitorModule() {
     const toSend = leads.filter(l => !excluded.has(l.id) && !crmSent.has(l.id));
     if (toSend.length === 0) return;
     setSendingAll(true);
-    for (const l of toSend) await sendCrm(l.id, l.phone, l.author_name, `Источник: ${l.source}. ${l.text||""}`);
+    for (const l of toSend) {
+      const ok = await sendCrm(l.id, l.phone, l.author_name, `Источник: ${l.source}. ${l.text||""}`);
+      if (ok) setLeads(prev => prev.filter(x => x.id !== l.id));
+    }
     setSendingAll(false);
   };
 
@@ -552,7 +555,7 @@ function MonitorModule() {
                             <td className="px-3 py-2.5">
                               {crmSent.has(l.id)
                                 ? <span className="text-xs text-emerald-400 flex items-center gap-1"><Icon name="Check" size={12}/>Добавлен</span>
-                                : <button onClick={() => sendCrm(l.id, l.phone, l.author_name, `Источник: ${l.source}. ${l.text||""}`)}
+                                : <button onClick={async () => { const ok = await sendCrm(l.id, l.phone, l.author_name, `Источник: ${l.source}. ${l.text||""}`); if (ok) setLeads(prev => prev.filter(x => x.id !== l.id)); }}
                                     disabled={crmSending === l.id || excluded.has(l.id)}
                                     className="flex items-center gap-1 text-xs px-2 py-1 bg-primary/10 text-primary rounded hover:bg-primary/20 transition-colors disabled:opacity-50">
                                     {crmSending === l.id ? <Icon name="Loader2" size={11} className="animate-spin"/> : <Icon name="Send" size={11}/>}
