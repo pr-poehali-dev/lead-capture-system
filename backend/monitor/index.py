@@ -45,30 +45,7 @@ def get_conn():
     return psycopg2.connect(os.environ["DATABASE_URL"])
 
 def ensure_tables(cur):
-    cur.execute(f"CREATE SCHEMA IF NOT EXISTS {SCHEMA}")
-    cur.execute(f"""
-        CREATE TABLE IF NOT EXISTS {SCHEMA}.monitor_tasks (
-            id SERIAL PRIMARY KEY,
-            competitor_name TEXT NOT NULL,
-            keywords TEXT DEFAULT '',
-            status TEXT DEFAULT 'pending',
-            created_at TIMESTAMP DEFAULT NOW(),
-            last_run TIMESTAMP
-        )
-    """)
-    cur.execute(f"""
-        CREATE TABLE IF NOT EXISTS {SCHEMA}.monitor_leads (
-            id SERIAL PRIMARY KEY,
-            task_id INTEGER NOT NULL,
-            phone TEXT DEFAULT '',
-            email TEXT DEFAULT '',
-            source_name TEXT DEFAULT '',
-            source_url TEXT DEFAULT '',
-            snippet TEXT DEFAULT '',
-            intent_score INTEGER DEFAULT 50,
-            created_at TIMESTAMP DEFAULT NOW()
-        )
-    """)
+    pass
 
 def calc_intent(text):
     text_lower = text.lower()
