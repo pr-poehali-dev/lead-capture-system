@@ -257,10 +257,10 @@ def search_telegram_all():
     """Парсит все известные Telegram-каналы про контрактную службу параллельно."""
     results = []
     with ThreadPoolExecutor(max_workers=5) as executor:
-        futures = {executor.submit(search_telegram_channel, ch): ch for ch in TELEGRAM_CHANNELS}
-        for future in as_completed(futures, timeout=15):
+        futures = [executor.submit(search_telegram_channel, ch) for ch in TELEGRAM_CHANNELS]
+        for future in futures:
             try:
-                results.extend(future.result(timeout=6))
+                results.extend(future.result(timeout=8))
             except Exception:
                 pass
     return results
