@@ -270,7 +270,7 @@ def search_telegram_all():
     return results
 
 def search_vk_token(keywords):
-    """Ищет в ВКонтакте посты и комментарии с токеном — значительно больше результатов."""
+    """Ищет в ВКонтакте посты через wall.search с токеном."""
     token = os.environ.get("VK_ACCESS_TOKEN", "")
     if not token:
         return []
@@ -284,8 +284,8 @@ def search_vk_token(keywords):
     for q in queries[:10]:
         query = urllib.parse.quote_plus(q)
         url = (
-            f"https://api.vk.com/method/newsfeed.search"
-            f"?q={query}&count=50&v=5.131&access_token={token}"
+            f"https://api.vk.com/method/wall.search"
+            f"?query={query}&owners_only=0&count=50&v=5.131&access_token={token}"
         )
         try:
             raw = http_get(url)
@@ -408,7 +408,7 @@ def search_avito(keywords):
 def esc(val):
     return str(val).replace("'", "''")
 
-def save_results(task_id, results, cur):
+def save_results(task_id, results, conn):
     """Сохраняет найденные лиды в БД."""
     saved = 0
     for r in results:
@@ -424,17 +424,19 @@ def save_results(task_id, results, cur):
                 f" (task_id, phone, email, source_name, source_url, snippet, intent_score)"
                 f" VALUES ({int(task_id)}, '{phone}', '{email}', '{source_name}', '{source_url}', '{snippet}', {intent_score})"
             )
-            cur.execute(sql)
+            c = conn.cursor()
+            c.execute(sql)
+            conn.commit()
             saved += 1
         except Exception as e:
             print(f"[ERROR] save_results: {e}")
             try:
-                cur.connection.rollback()
+                conn.rollback()
             except Exception:
                 pass
     return saved
 
-def run_source(task_id, source, competitor_name, keywords, cur):
+def run_source(task_id, source, competitor_name, keywords, conn):
     """Запускает один источник и сохраняет результаты."""
     search_kw = keywords if keywords else competitor_name
     results = []
@@ -451,10 +453,12 @@ def run_source(task_id, source, competitor_name, keywords, cur):
     elif source == "telegram":
         results = search_telegram_all()
     print(f"[DEBUG] source={source} found={len(results)}")
-    saved = save_results(task_id, results, cur)
+    saved = save_results(task_id, results, conn)
+    cur = conn.cursor()
     cur.execute(
         f"UPDATE {SCHEMA}.monitor_tasks SET last_run = NOW(), status = 'running' WHERE id = {int(task_id)}"
     )
+    conn.commit()
     return saved
 
 def handler(event: dict, context) -> dict:
@@ -582,12 +586,13 @@ def handler(event: dict, context) -> dict:
             conn.close()
             return {"statusCode": 404, "headers": json_headers, "body": json.dumps({"error": "Task not found"})}
         t_id, competitor_name, keywords = row
-        found = run_source(t_id, source, competitor_name, keywords, cur)
+        found = run_source(t_id, source, competitor_name, keywords, conn)
         if source == "telegram":
-            cur.execute(
+            c2 = conn.cursor()
+            c2.execute(
                 f"UPDATE {SCHEMA}.monitor_tasks SET status = 'done', last_run = NOW() WHERE id = {int(t_id)}"
             )
-        conn.commit()
+            conn.commit()
         conn.close()
         return {
             "statusCode": 200,
@@ -603,9 +608,8 @@ def handler(event: dict, context) -> dict:
             cur.execute(f"UPDATE {SCHEMA}.monitor_tasks SET status = 'running' WHERE id = {int(t_id)}")
             conn.commit()
             for source in ["yandex", "vk", "vk_token", "vk_groups", "avito"]:
-                found = run_source(t_id, source, competitor_name, keywords, cur)
+                found = run_source(t_id, source, competitor_name, keywords, conn)
                 total_found += found
-                conn.commit()
             cur.execute(f"UPDATE {SCHEMA}.monitor_tasks SET status = 'done', last_run = NOW() WHERE id = {int(t_id)}")
             conn.commit()
         conn.close()
