@@ -290,7 +290,11 @@ def search_vk_token(keywords):
         try:
             raw = http_get(url)
             data = json.loads(raw)
+            if "error" in data:
+                print(f"[VK_ERROR] {data['error']}")
+                continue
             items = data.get("response", {}).get("items", [])
+            print(f"[VK_TOKEN_DEBUG] q={q[:30]} items={len(items)}")
             for item in items:
                 text = item.get("text", "")
                 if not text:
@@ -314,8 +318,8 @@ def search_vk_token(keywords):
                     if key not in seen:
                         seen.add(key)
                         results.append({"phone": "", "email": "", "source_name": "ВКонтакте (токен)", "source_url": post_url, "snippet": text[:200], "intent_score": intent})
-        except Exception:
-            pass
+        except Exception as e:
+            print(f"[VK_TOKEN_EXCEPTION] {e}")
     return results
 
 def search_vk_groups(keywords):
@@ -415,16 +419,19 @@ def save_results(task_id, results, cur):
             source_url = esc(str(r.get("source_url", ""))[:500])
             snippet = esc(str(r.get("snippet", ""))[:1000])
             intent_score = int(r.get("intent_score", 50))
-            cur.execute(
-                f"""
-                INSERT INTO {SCHEMA}.monitor_leads
-                    (task_id, phone, email, source_name, source_url, snippet, intent_score)
-                VALUES ({int(task_id)}, '{phone}', '{email}', '{source_name}', '{source_url}', '{snippet}', {intent_score})
-                """
+            sql = (
+                f"INSERT INTO {SCHEMA}.monitor_leads"
+                f" (task_id, phone, email, source_name, source_url, snippet, intent_score)"
+                f" VALUES ({int(task_id)}, '{phone}', '{email}', '{source_name}', '{source_url}', '{snippet}', {intent_score})"
             )
+            cur.execute(sql)
             saved += 1
-        except Exception:
-            cur.connection.rollback()
+        except Exception as e:
+            print(f"[ERROR] save_results: {e}")
+            try:
+                cur.connection.rollback()
+            except Exception:
+                pass
     return saved
 
 def run_source(task_id, source, competitor_name, keywords, cur):
