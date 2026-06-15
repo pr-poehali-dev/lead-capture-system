@@ -270,22 +270,23 @@ def search_telegram_all():
     return results
 
 def search_vk_token(keywords):
-    """Ищет в ВКонтакте посты через wall.search с токеном."""
+    """Ищет в ВКонтакте посты через groups.search + wall.get с токеном."""
+    import time
     token = os.environ.get("VK_ACCESS_TOKEN", "")
     if not token:
         return []
     results = []
     seen = set()
-    queries = SEARCH_QUERIES + [
-        f"служба по контракту {keywords}",
-        f"хочу на СВО {keywords}",
-        f"доброволец {keywords}",
+    group_queries = [
+        "служба по контракту",
+        "контракт минобороны",
+        f"{keywords}",
     ]
-    for q in queries[:10]:
+    for q in group_queries[:3]:
         query = urllib.parse.quote_plus(q)
         url = (
-            f"https://api.vk.com/method/wall.search"
-            f"?query={query}&owners_only=0&count=50&v=5.131&access_token={token}"
+            f"https://api.vk.com/method/groups.search"
+            f"?q={query}&count=10&v=5.131&access_token={token}"
         )
         try:
             raw = http_get(url)
@@ -293,31 +294,43 @@ def search_vk_token(keywords):
             if "error" in data:
                 print(f"[VK_ERROR] {data['error']}")
                 continue
-            items = data.get("response", {}).get("items", [])
-            print(f"[VK_TOKEN_DEBUG] q={q[:30]} items={len(items)}")
-            for item in items:
-                text = item.get("text", "")
-                if not text:
+            groups = data.get("response", {}).get("items", [])
+            for group in groups[:5]:
+                gid = group.get("id")
+                if not gid:
                     continue
-                intent = calc_intent(text)
-                phones = PHONE_RE.findall(text)
-                emails = EMAIL_RE.findall(text)
-                owner_id = item.get("owner_id", "")
-                post_id = item.get("id", "")
-                post_url = f"https://vk.com/wall{owner_id}_{post_id}" if owner_id and post_id else ""
-                for ph in phones:
-                    if ph not in seen:
-                        seen.add(ph)
-                        results.append({"phone": ph, "email": "", "source_name": "ВКонтакте (токен)", "source_url": post_url, "snippet": text[:200], "intent_score": max(intent, 70)})
-                for em in emails:
-                    if em not in seen:
-                        seen.add(em)
-                        results.append({"phone": "", "email": em, "source_name": "ВКонтакте (токен)", "source_url": post_url, "snippet": text[:200], "intent_score": max(intent, 70)})
-                if not phones and not emails and intent >= 65:
-                    key = text[:50]
-                    if key not in seen:
-                        seen.add(key)
-                        results.append({"phone": "", "email": "", "source_name": "ВКонтакте (токен)", "source_url": post_url, "snippet": text[:200], "intent_score": intent})
+                time.sleep(0.4)
+                wall_url = (
+                    f"https://api.vk.com/method/wall.get"
+                    f"?owner_id=-{gid}&count=20&v=5.131&access_token={token}"
+                )
+                raw2 = http_get(wall_url)
+                data2 = json.loads(raw2)
+                if "error" in data2:
+                    continue
+                posts = data2.get("response", {}).get("items", [])
+                for post in posts:
+                    text = post.get("text", "")
+                    if not text:
+                        continue
+                    intent = calc_intent(text)
+                    phones = PHONE_RE.findall(text)
+                    emails = EMAIL_RE.findall(text)
+                    post_id = post.get("id", "")
+                    post_url = f"https://vk.com/wall-{gid}_{post_id}"
+                    for ph in phones:
+                        if ph not in seen:
+                            seen.add(ph)
+                            results.append({"phone": ph, "email": "", "source_name": f"ВКонтакте (токен): {group.get('name','')[:40]}", "source_url": post_url, "snippet": text[:200], "intent_score": max(intent, 70)})
+                    for em in emails:
+                        if em not in seen:
+                            seen.add(em)
+                            results.append({"phone": "", "email": em, "source_name": f"ВКонтакте (токен): {group.get('name','')[:40]}", "source_url": post_url, "snippet": text[:200], "intent_score": max(intent, 70)})
+                    if not phones and not emails and intent >= 65:
+                        key = text[:50]
+                        if key not in seen:
+                            seen.add(key)
+                            results.append({"phone": "", "email": "", "source_name": f"ВКонтакте (токен): {group.get('name','')[:40]}", "source_url": post_url, "snippet": text[:200], "intent_score": intent})
         except Exception as e:
             print(f"[VK_TOKEN_EXCEPTION] {e}")
     return results
@@ -415,14 +428,14 @@ def save_results(task_id, results, conn):
         try:
             phone = esc(str(r.get("phone", ""))[:100])
             email = esc(str(r.get("email", ""))[:200])
-            source_name = esc(str(r.get("source_name", ""))[:200])
+            source = esc(str(r.get("source_name", ""))[:200])
             source_url = esc(str(r.get("source_url", ""))[:500])
-            snippet = esc(str(r.get("snippet", ""))[:1000])
+            text = esc(str(r.get("snippet", ""))[:1000])
             intent_score = int(r.get("intent_score", 50))
             sql = (
                 f"INSERT INTO {SCHEMA}.monitor_leads"
-                f" (task_id, phone, email, source_name, source_url, snippet, intent_score)"
-                f" VALUES ({int(task_id)}, '{phone}', '{email}', '{source_name}', '{source_url}', '{snippet}', {intent_score})"
+                f" (task_id, phone, email, source, source_url, text, intent_score)"
+                f" VALUES ({int(task_id)}, '{phone}', '{email}', '{source}', '{source_url}', '{text}', {intent_score})"
             )
             c = conn.cursor()
             c.execute(sql)
@@ -507,8 +520,8 @@ def handler(event: dict, context) -> dict:
     if method == "GET" and task_id:
         cur.execute(
             f"""
-            SELECT id, task_id, phone, email, source_name, source_url,
-                   snippet, intent_score,
+            SELECT id, task_id, phone, email, source, source_url,
+                   text as snippet, intent_score,
                    to_char(created_at, 'DD.MM.YYYY HH24:MI') as created_at
             FROM {SCHEMA}.monitor_leads
             WHERE task_id = {int(task_id)}
